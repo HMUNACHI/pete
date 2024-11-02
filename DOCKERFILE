@@ -1,0 +1,39 @@
+FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    curl \
+    cmake \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade pip
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+RUN python src/chebychev_extension/setup.py install
+
+FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app /app
+
+RUN useradd -m myuser
+USER myuser
+
+EXPOSE 6006
+
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+CMD ["/usr/bin/supervisord"]
