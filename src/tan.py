@@ -202,6 +202,8 @@ class TAN(nn.Module):
     ):
         super(TAN, self).__init__()
 
+        self.pre_norm = RMSNorm(d_model)
+        self.pre_mlp = DecomposedLinear(d_model, d_model)
         self.expansion = ChebyshevBlock(vocab_size, d_model)
         self.mlp = DecomposedLinear(d_model, d_model)
         self.norm = RMSNorm(d_model)
@@ -230,9 +232,10 @@ class TAN(nn.Module):
         )
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor = None):
-        x_polynomials = self.expansion(input_ids)
-        x = self.mlp(x_polynomials) + x_polynomials
-        x = self.dropout(self.norm(x))
+        x = self.pre_mlp(self.pre_norm(input_ids)) 
+        x_polynomials = self.expansion(x) 
+        x = self.norm(self.mlp(x_polynomials) + x_polynomials)
+        x = self.dropout(x)
 
         for AttentionBlock in self.layers:
             x = AttentionBlock(x, attention_mask)
