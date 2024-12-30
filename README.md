@@ -2,6 +2,14 @@
 
 This repository implements Tiny Attention Networks (TANs), a lightweight and efficient architecture for text embedding that combines Chebyshev polynomial expansion with attention mechanisms.
 
+## How to use
+- `git clone <link>`
+- `pip install -r requirements.txt`
+- tmux 
+- `python main.py --num_hidden_layers_list 128 256 <blah blah>`
+- `ctrl + b`, then `d`
+- to log back in `tmux attach`
+
 ## Architecture Overview
 
 TANs consist of several key components:
