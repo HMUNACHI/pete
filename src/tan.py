@@ -123,6 +123,12 @@ class AttentionBlock(nn.Module):
         self.query = DecomposedLinear(d_model, self.all_head_size)
         self.key = DecomposedLinear(d_model, self.all_head_size)
         self.value = DecomposedLinear(d_model, self.all_head_size)
+        
+        self.low_rank_factor = 4
+        self.key_low_rank = nn.Linear(d_model, d_model // self.low_rank_factor)
+        self.value_low_rank = nn.Linear(d_model, d_model // self.low_rank_factor)
+        self.recovery = nn.Linear(d_model // self.low_rank_factor , d_model) 
+        
 
         self.dropout = nn.Dropout(attention_probs_dropout_prob)
         self.attn_out = DecomposedLinear(d_model, d_model)
@@ -142,8 +148,10 @@ class AttentionBlock(nn.Module):
         return tensor.view(new_shape)
 
     def attn(self, q, k, v, attention_mask):
-        dot_product = torch.matmul(q, k.transpose(-1, -2))
-        scaled_dot_product = dot_product / math.sqrt(self.attention_head_size)
+        k_low_rank = self.key_low_rank(k)
+        v_low_rank = self.key_low_rank(v)
+        dot_product = torch.matmul(q, k_low_rank.transpose(-1, -2))
+        scaled_dot_product = dot_product / math.sqrt(self.attention_head_size // self.low_rank_factor)
 
         if attention_mask is not None:
             attention_mask = attention_mask == 1
@@ -154,7 +162,8 @@ class AttentionBlock(nn.Module):
 
         attention_weights = nn.functional.softmax(scaled_dot_product, dim=-1)
         attention_weights = self.dropout(attention_weights)
-        return torch.matmul(attention_weights, v)
+        attended_outputs = torch.matmul(attention_weights, v_low_rank)
+        return self.recovery(attended_outputs)
 
     def forward(self, x, attention_mask):
         residual = x
