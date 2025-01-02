@@ -2,13 +2,15 @@
 
 This repository implements Tiny Attention Networks (TANs), a lightweight and efficient architecture for text embedding that combines Chebyshev polynomial expansion with attention mechanisms.
 
+## GPU server checklist (Codes are for Ubuntu Linux)
+- Should have a working nvcc compiler (verify with `nvcc --version`, install with `apt install nvidia-cuda-toolkit`)
+- Should have g++ compiler (verify with `which g++`, install with `sudo apt install build-essential`)
+
 ## How to use
-- `git clone <link>`
+- `git clone https://github.com/HMUNACHI/tiny-attention-networks.git && cd tiny-attention-networks`
 - `pip install -r requirements.txt`
-- tmux 
+- Install the custom gpu extension `python src/chebychev_extension/setup.py install`
 - `python main.py --num_hidden_layers_list 128 256 <blah blah>`
-- `ctrl + b`, then `d`
-- to log back in `tmux attach`
 
 ## Architecture Overview
 
