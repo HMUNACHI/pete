@@ -135,7 +135,7 @@ class Layer(nn.Module):
             attention_mask = attention_mask == 1
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
             scaled_dot_product = torch.where(
-                attention_mask, scaled_dot_product, torch.tensor(float("-inf"))
+                attention_mask, scaled_dot_product, torch.tensor(float("-inf"), device=q.device)
             )
 
         attention_weights = nn.functional.softmax(scaled_dot_product, dim=-1)
