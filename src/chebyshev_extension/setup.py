@@ -8,7 +8,11 @@ setup(
     ext_modules=[
         CUDAExtension(
             name="chebyshev_extension",
-            sources=["chebyshev.cpp", "chebyshev_kernel.cu"],
+            sources=[
+                "chebyshev.cpp",
+                "chebyshev_kernel.cu"
+            ],
+
         )
     ],
     cmdclass={"build_ext": BuildExtension},

@@ -88,13 +88,13 @@ class RMSNorm(nn.Module):
     Implements Root Mean Square Layer Normalization.
     """
 
-    def __init__(self, d_model: int, eps: float = 1e-6):
+    def __init__(self, dim: int, eps: float = 1e-6):
         super(RMSNorm, self).__init__()
-        self.weight = nn.Parameter(torch.ones(d_model))
+        self.weight = nn.Parameter(torch.ones(dim))
         self.eps = eps
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        rms = torch.sqrt(torch.mean(x**2, dim=-1, keepdim=True) + self.eps)
+    def forward(self, x: torch.Tensor, dim=-1) -> torch.Tensor:
+        rms = torch.sqrt(torch.mean(x**2, dim=dim, keepdim=True) + self.eps)
         x_normalized = x / rms
         return self.weight * x_normalized
 
@@ -123,12 +123,6 @@ class AttentionBlock(nn.Module):
         self.query = DecomposedLinear(d_model, self.all_head_size)
         self.key = DecomposedLinear(d_model, self.all_head_size)
         self.value = DecomposedLinear(d_model, self.all_head_size)
-        
-        self.low_rank_factor = 4
-        self.key_low_rank = nn.Linear(d_model, d_model // self.low_rank_factor)
-        self.value_low_rank = nn.Linear(d_model, d_model // self.low_rank_factor)
-        self.recovery = nn.Linear(d_model // self.low_rank_factor , d_model) 
-        
 
         self.dropout = nn.Dropout(attention_probs_dropout_prob)
         self.attn_out = DecomposedLinear(d_model, d_model)
@@ -148,22 +142,19 @@ class AttentionBlock(nn.Module):
         return tensor.view(new_shape)
 
     def attn(self, q, k, v, attention_mask):
-        k_low_rank = self.key_low_rank(k)
-        v_low_rank = self.key_low_rank(v)
-        dot_product = torch.matmul(q, k_low_rank.transpose(-1, -2))
-        scaled_dot_product = dot_product / math.sqrt(self.attention_head_size // self.low_rank_factor)
+        dot_product = torch.matmul(q, k.transpose(-1, -2))
+        scaled_dot_product = dot_product / math.sqrt(self.attention_head_size)
 
         if attention_mask is not None:
             attention_mask = attention_mask == 1
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
             scaled_dot_product = torch.where(
-                attention_mask, scaled_dot_product, torch.tensor(float("-inf"))
+                attention_mask, scaled_dot_product, torch.tensor(float("-inf"), device=q.device)
             )
 
         attention_weights = nn.functional.softmax(scaled_dot_product, dim=-1)
         attention_weights = self.dropout(attention_weights)
-        attended_outputs = torch.matmul(attention_weights, v_low_rank)
-        return self.recovery(attended_outputs)
+        return torch.matmul(attention_weights, v)
 
     def forward(self, x, attention_mask):
         residual = x
@@ -210,9 +201,6 @@ class TAN(nn.Module):
         attention_probs_dropout_prob,
     ):
         super(TAN, self).__init__()
-
-        self.pre_norm = RMSNorm(d_model)
-        self.pre_mlp = DecomposedLinear(d_model, d_model)
         self.expansion = ChebyshevBlock(vocab_size, d_model)
         self.mlp = DecomposedLinear(d_model, d_model)
         self.norm = RMSNorm(d_model)
@@ -241,8 +229,7 @@ class TAN(nn.Module):
         )
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor = None):
-        x = self.pre_mlp(self.pre_norm(input_ids)) 
-        x_polynomials = self.expansion(x) 
+        x_polynomials = self.expansion(input_ids) 
         x = self.norm(self.mlp(x_polynomials) + x_polynomials)
         x = self.dropout(x)
 

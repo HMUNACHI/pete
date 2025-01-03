@@ -8,7 +8,6 @@ from transformers import AutoTokenizer
 torch.manual_seed(0)
 np.random.seed(0)
 
-from src.benchmark import glue_benchmark
 from src.data import GlueDatasetLoader
 from src.embedder import Embedder
 from src.tan import TAN
@@ -107,7 +106,7 @@ def run(experiment):
                 experiment,
                 name,
             )
-        glue_benchmark(transformer_embedder.model, experiment, name)
+        # glue_benchmark(transformer_embedder.model, experiment, name)
 
     print("\nTraining TAN\n")
     name = f"TAN_{experiment.num_hidden_layers}_{experiment.d_model}"
@@ -115,7 +114,7 @@ def run(experiment):
         tan_embedder = train(
             experiment.tan_embedder, experiment.tan_optimizer, experiment, name
         )
-    glue_benchmark(tan_embedder.model, experiment, name)
+    # glue_benchmark(tan_embedder.model, experiment, name)
 
 
 def main():
@@ -124,58 +123,58 @@ def main():
     )
 
     parser.add_argument(
-        "--num_hidden_layers_list",
+        "--num-hidden-layers",
         nargs="+",
         type=int,
         default=[1],
         help="List of num_hidden_layers to try.",
     )
     parser.add_argument(
-        "--d_model_list",
+        "--d-model",
         nargs="+",
         type=int,
-        default=[64],
+        default=[128],
         help="List of d_model dimensions to try.",
     )
-    parser.add_argument("--num_epochs", type=int, default=5, help="Number of epochs.")
-    parser.add_argument("--batch_size", type=int, default=256, help="Batch size.")
+    parser.add_argument("--num-epochs", type=int, default=5, help="Number of epochs.")
+    parser.add_argument("--batch-size", type=int, default=256, help="Batch size.")
     parser.add_argument(
-        "--learning_rate", type=float, default=2e-5, help="Learning rate."
+        "--learning-rate", type=float, default=2e-5, help="Learning rate."
     )
     parser.add_argument(
-        "--warmup_steps", type=int, default=1000, help="Number of warmup steps."
+        "--warmup-steps", type=int, default=1000, help="Number of warmup steps."
     )
     parser.add_argument(
-        "--train_datasets",
+        "--train-datasets",
         nargs="+",
         default=["snli", "mnli"],
         help="List of training datasets.",
     )
     parser.add_argument(
-        "--validation_datasets",
+        "--validation-datasets",
         nargs="+",
         default=["stsb"],
         help="List of validation datasets.",
     )
     parser.add_argument(
-        "--train_baseline",
+        "--train-baseline",
         action="store_true",
         help="Whether to train the baseline Transformer.",
     )
     parser.add_argument(
-        "--dropout_prob", type=float, default=0.2, help="Dropout probability."
+        "--dropout-prob", type=float, default=0.2, help="Dropout probability."
     )
     parser.add_argument(
-        "--max_seq_len", type=int, default=128, help="Maximum sequence length."
+        "--max-seq-len", type=int, default=128, help="Maximum sequence length."
     )
     parser.add_argument(
-        "--vocab_size", type=int, default=30552, help="Vocabulary size."
+        "--vocab-size", type=int, default=30552, help="Vocabulary size."
     )
 
     args = parser.parse_args()
 
-    for n in args.num_hidden_layers_list:
-        for dim in args.d_model_list:
+    for n in args.num_hidden_layers:
+        for dim in args.d_model:
             experiment = Experiment(
                 num_hidden_layers=n,
                 num_attention_heads=n,

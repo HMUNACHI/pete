@@ -1,62 +1,16 @@
 # Tiny Attention Networks (TANs)
 
-This repository implements Tiny Attention Networks (TANs), a lightweight and efficient architecture for text embedding that combines Chebyshev polynomial expansion with attention mechanisms.
+This repository implements Tiny Attention Networks (TANs)
 
 ## GPU server checklist (Codes are for Ubuntu Linux)
 - Should have a working nvcc compiler (verify with `nvcc --version`, install with `apt install nvidia-cuda-toolkit`)
+- We used `Cuda-tool-kit 11.7` which is compatible with the pytorch version in `environment.yaml`
 - Should have g++ compiler (verify with `which g++`, install with `sudo apt install build-essential`)
+- Chebychev expansion itself is written in C++/CUDA, a GPU is compulsory
 
 ## How to use
 - `git clone https://github.com/HMUNACHI/tiny-attention-networks.git && cd tiny-attention-networks`
-- `pip install -r requirements.txt`
-- Install the custom gpu extension `python src/chebychev_extension/setup.py install`
-- `python main.py --num_hidden_layers_list 128 256 <blah blah>`
-
-## Architecture Overview
-
-TANs consist of several key components:
-
-### 1. Chebyshev Expansion Layer
-- Replaces traditional token embeddings with Chebyshev polynomial expansion
-- Uses a fused CUDA kernel for efficient computation
-- Projects input tokens into a d_model dimensional space using polynomial basis functions
-- Implemented in `ChebyshevBlock` class
-
-### 2. Attention Blocks
-Each attention block contains:
-- Multi-head attention with decomposed linear projections
-- Rotary positional embeddings (RoPE) for position-aware attention
-- RMSNorm for stable training
-- Residual connections
-- Bottleneck MLP with SiLU activation
-
-### 3. Decomposed Linear Layers
-- Reduces parameter count by factoring linear transformations
-- Projects through a bottleneck dimension (in_features/4)
-- Uses SiLU activation between projections
-- Applied in attention key/query/value projections and FFN
-
-### 4. Pooling & Normalization
-- Mean pooling over sequence dimension
-- Final projection and tanh activation for sentence embeddings
-- RMSNorm used throughout instead of LayerNorm
-
-## Training
-
-The model is trained using:
-- Contrastive learning with InfoNCE loss
-- Automatic mixed precision (AMP) for efficient training
-- Linear learning rate warmup
-- Gradient scaling for stable mixed precision training
-
-### Loss Function
-- Normalized temperature-scaled cross entropy
-- Learnable temperature parameter
-- Bidirectional contrastive loss between anchor and positive pairs
-
-### Evaluation
-- Evaluated on STS benchmark using:
-  - Pearson correlation
-  - Spearman correlation
-- Cosine similarity used for sentence similarity scoring
-
+- Create the environment with the necessary packages `conda env create -f environment.yml`
+- Activate with `conda activate tan_env` 
+- Install the custom gpu kernels `python src/chebychev_extension/setup.py install`
+- Run simple tiny example with `python main.py`, check main.py for arguments.

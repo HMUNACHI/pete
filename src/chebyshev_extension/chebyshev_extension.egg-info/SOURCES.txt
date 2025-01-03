@@ -1,6 +1,6 @@
-chebyshev.cpp
-chebyshev_kernel.cu
 setup.py
+/root/tiny-attention-networks/src/chebyshev_extension/chebyshev.cpp
+/root/tiny-attention-networks/src/chebyshev_extension/chebyshev_kernel.cu
 chebyshev_extension.egg-info/PKG-INFO
 chebyshev_extension.egg-info/SOURCES.txt
 chebyshev_extension.egg-info/dependency_links.txt

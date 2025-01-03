@@ -7,7 +7,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 from scipy.stats import pearsonr, spearmanr
-from torch.amp import GradScaler
+from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from transformers import get_linear_schedule_with_warmup
@@ -41,8 +41,8 @@ def evaluate(
                 embeddings2 = model(
                     input_ids=batch[2].to(device), attention_mask=batch[3].to(device)
                 )[1]
-                vectors_one.append(embeddings1.cpu())
-                vectors_two.append(embeddings2.cpu())
+                vectors_one.append(embeddings1.cpu().float())
+                vectors_two.append(embeddings2.cpu().float())
                 labels.extend(batch[4].cpu().numpy())
 
     vectors_one = torch.cat(vectors_one)
@@ -73,7 +73,13 @@ def setup_scheduler(optimizer, warmup_steps: int, total_steps: int):
 
 
 def setup_scaler() -> GradScaler:
-    return GradScaler("cuda")
+    return GradScaler(
+        init_scale=2.0**16,       # Initial scale (default: 2^16)
+        growth_factor=2.0,        # Factor to increase the scale (default: 2.0)
+        backoff_factor=0.5,       # Factor to decrease the scale (default: 0.5)
+        growth_interval=2000,     # Steps before increasing the scale (default: 2000)
+        enabled=True              # Enable or disable the scaler (default: True)
+    )
 
 
 def log_metrics(
