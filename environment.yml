@@ -36,7 +36,6 @@ dependencies:
       - attrs==24.3.0
       - certifi==2024.12.14
       - charset-normalizer==3.4.1
-      - chebyshev-extension==0.0.0
       - cycler==0.12.1
       - datasets==3.2.0
       - dill==0.3.8
