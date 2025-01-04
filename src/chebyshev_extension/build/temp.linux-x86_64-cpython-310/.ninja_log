@@ -1,4 +1,0 @@
-# ninja log v5
-0	13684	1735918165778746490	/root/tiny-attention-networks/src/chebyshev_extension/build/temp.linux-x86_64-cpython-310/root/tiny-attention-networks/src/chebyshev_extension/chebyshev.o	c0a8fb4ac6c196c2
-35	13113	1735918937188625335	/root/tiny-attention-networks/src/chebyshev_extension/build/temp.linux-x86_64-cpython-310/root/tiny-attention-networks/src/chebyshev_extension/chebyshev.o	21b38b45fc208e
-35	40971	1735918965038850889	/root/tiny-attention-networks/src/chebyshev_extension/build/temp.linux-x86_64-cpython-310/root/tiny-attention-networks/src/chebyshev_extension/chebyshev_kernel.o	fd8e2283633a6e66

@@ -11,6 +11,6 @@ This repository implements Tiny Attention Networks (TANs)
 ## How to use
 - `git clone https://github.com/HMUNACHI/tiny-attention-networks.git && cd tiny-attention-networks`
 - Create the environment with the necessary packages `conda env create -f environment.yml`
-- Activate with `conda activate tan_env` 
-- Install the custom gpu kernels `python src/chebychev_extension/setup.py install`
+- Activate with `conda activate tan_env`
+- Install the custom gpu kernels with `cd src/polynomial_embeddings && python setup.py install && cd ../..`
 - Run simple tiny example with `python main.py`, check main.py for arguments.

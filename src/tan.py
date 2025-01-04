@@ -5,17 +5,17 @@ import numpy as np
 import torch
 from torch import nn
 
-import chebyshev_extension
+import polynomial_embeddings
 
 torch.manual_seed(0)
 np.random.seed(0)
 
 
-class ChebyshevBlock(nn.Module):
+class PolynomialBlock(nn.Module):
     """Uses fused CUDA kernel for normalization and Chebyshev expansion."""
 
     def __init__(self, max_seq_len: int, d_model: int):
-        super(ChebyshevBlock, self).__init__()
+        super(PolynomialBlock, self).__init__()
         self.max_seq_len = max_seq_len
         self.d_model = d_model
 
@@ -25,7 +25,7 @@ class ChebyshevBlock(nn.Module):
 
         # Call the fused CUDA kernel
         input_ids = input_ids.float()
-        embeddings = chebyshev_extension.forward(
+        embeddings = polynomial_embeddings.chebyshev(
             input_ids, self.max_seq_len, self.d_model
         )
         return embeddings[0]
@@ -109,8 +109,6 @@ class AttentionBlock(nn.Module):
         d_model,
         num_attention_heads,
         max_seq_len,
-        attention_probs_dropout_prob,
-        hidden_dropout_prob,
     ):
         super(AttentionBlock, self).__init__()
 
@@ -124,7 +122,6 @@ class AttentionBlock(nn.Module):
         self.key = DecomposedLinear(d_model, self.all_head_size)
         self.value = DecomposedLinear(d_model, self.all_head_size)
 
-        self.dropout = nn.Dropout(attention_probs_dropout_prob)
         self.attn_out = DecomposedLinear(d_model, d_model)
         self.norm1 = RMSNorm(d_model)
         self.bottleneck_mlp = DecomposedLinear(d_model, d_model)
@@ -153,7 +150,6 @@ class AttentionBlock(nn.Module):
             )
 
         attention_weights = nn.functional.softmax(scaled_dot_product, dim=-1)
-        attention_weights = self.dropout(attention_weights)
         return torch.matmul(attention_weights, v)
 
     def forward(self, x, attention_mask):
@@ -173,13 +169,11 @@ class AttentionBlock(nn.Module):
             attended_outputs, self.num_attention_heads, self.attention_head_size
         )
         attended_outputs = self.attn_out(attended_outputs)
-        attended_outputs = self.dropout(attended_outputs)
 
         x = self.norm1(attended_outputs + residual)
 
         residual = x
         x = self.bottleneck_mlp(x)
-        x = self.dropout(x)
         x = self.norm2(x + residual)
 
         return x
@@ -197,14 +191,11 @@ class TAN(nn.Module):
         num_hidden_layers,
         num_attention_heads,
         max_seq_len,
-        hidden_dropout_prob,
-        attention_probs_dropout_prob,
     ):
         super(TAN, self).__init__()
-        self.expansion = ChebyshevBlock(vocab_size, d_model)
+        self.expansion = PolynomialBlock(vocab_size, d_model)
         self.mlp = DecomposedLinear(d_model, d_model)
         self.norm = RMSNorm(d_model)
-        self.dropout = nn.Dropout(hidden_dropout_prob)
 
         self.layers = nn.ModuleList(
             [
@@ -212,8 +203,6 @@ class TAN(nn.Module):
                     d_model,
                     num_attention_heads,
                     max_seq_len,
-                    attention_probs_dropout_prob,
-                    hidden_dropout_prob,
                 )
                 for _ in range(num_hidden_layers)
             ]
@@ -231,7 +220,6 @@ class TAN(nn.Module):
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor = None):
         x_polynomials = self.expansion(input_ids) 
         x = self.norm(self.mlp(x_polynomials) + x_polynomials)
-        x = self.dropout(x)
 
         for AttentionBlock in self.layers:
             x = AttentionBlock(x, attention_mask)

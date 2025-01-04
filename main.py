@@ -63,9 +63,7 @@ class Experiment:
             d_model=self.d_model,
             num_hidden_layers=self.num_hidden_layers,
             num_attention_heads=self.num_attention_heads,
-            max_seq_len=self.max_seq_len,
-            hidden_dropout_prob=self.hidden_dropout_prob,
-            attention_probs_dropout_prob=self.attention_probs_dropout_prob,
+            max_seq_len=self.max_seq_len
         )
         self.tan_embedder = Embedder(tan)
         self.tan_optimizer = AdamW(
