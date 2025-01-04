@@ -14,3 +14,4 @@ This repository implements Tiny Attention Networks (TANs)
 - Activate with `conda activate tan_env`
 - Install the custom gpu kernels with `cd src/polynomial_embeddings && python setup.py install && cd ../..`
 - Run simple tiny example with `python main.py`, check main.py for arguments.
+- Tensorbnoard will launch after training.
