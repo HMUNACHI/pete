@@ -16,7 +16,16 @@ std::vector<torch::Tensor> legendre_fused_forward_cuda(
     int d_model
 );
 
+
+std::vector<torch::Tensor> fourier_fused_forward_cuda(
+    torch::Tensor input,
+    int max_seq_len,
+    int d_model
+);
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("chebyshev", &chebyshev_fused_forward_cuda, "Chebyshev Fused Forward (CUDA)");
     m.def("legendre", &legendre_fused_forward_cuda, "Legendre Fused Forward (CUDA)");
+    m.def("fourier", &fourier_fused_forward_cuda, "Fourier Fused Forward (CUDA)");
+
 }

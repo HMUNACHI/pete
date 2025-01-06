@@ -12,6 +12,7 @@ setup(
                 "index.cpp",
                 "chebyshev_kernel.cu",
                 "legendre_kernel.cu",
+                "fourier_kernel.cu",
             ],
 
         )

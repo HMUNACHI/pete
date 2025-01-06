@@ -4,56 +4,57 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <vector>
+#include <cmath>
 
-// CUDA kernel for fused normalization and Chebyshev expansion
+// CUDA kernel for fully parallel Fourier expansion
 template <typename scalar_t>
-__global__ void chebyshev_fused_kernel(
+__global__ void fourier_fused_kernel(
     const scalar_t* __restrict__ input,
     scalar_t* __restrict__ output,
     const int max_seq_len,
     const int d_model,
-    const int total_elements // batch_size * seq_len
+    const int total_elements // batch_size * seq_len * d_model
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= total_elements) return;
 
-    // Normalize input: 2 * (x / (max_seq_len - 1)) - 1
-    scalar_t x = 2.0 * (input[idx] / static_cast<scalar_t>(max_seq_len - 1)) - 1.0;
+    // Decompose linear index into batch, sequence, and frequency indices
+    int token_idx = idx / d_model; // Token index: batch * seq
+    int freq_idx = idx % d_model; // Frequency index for this token
 
-    // Initialize Chebyshev terms
-    // Assuming output is stored as [batch, seq, d_model]
-    // Each thread handles one [batch, seq] position
-    output[idx * d_model + 0] = 1.0; // T0(x) = 1
-    if (d_model > 1) {
-        output[idx * d_model + 1] = x; // T1(x) = x
-    }
-    for (int n = 2; n < d_model; ++n) {
-        output[idx * d_model + n] = 2.0 * x * output[idx * d_model + (n - 1)] - output[idx * d_model + (n - 2)];
+    // Normalize input: Map x to range [-1, 1]
+    scalar_t x = 2.0 * (input[token_idx] / static_cast<scalar_t>(max_seq_len - 1)) - 1.0;
+
+    // Compute Fourier term based on frequency index
+    scalar_t freq = static_cast<scalar_t>((freq_idx / 2) + 1); // Frequency scaling
+    if (freq_idx % 2 == 0) {
+        // Even index -> sine term
+        output[idx] = sin(freq * x * M_PI);
+    } else {
+        // Odd index -> cosine term
+        output[idx] = cos(freq * x * M_PI);
     }
 }
 
-std::vector<torch::Tensor> chebyshev_fused_forward_cuda(
+std::vector<torch::Tensor> fourier_fused_forward_cuda(
     torch::Tensor input,
     int max_seq_len,
     int d_model
 ) {
-    // Ensure input is contiguous and on CUDA
     TORCH_CHECK(input.is_cuda(), "Input must be a CUDA tensor");
     TORCH_CHECK(input.is_contiguous(), "Input must be contiguous");
 
     auto batch_size = input.size(0);
     auto seq_len = input.size(1);
-    auto total_elements = batch_size * seq_len;
+    auto total_elements = batch_size * seq_len * d_model;
 
-    // Allocate output tensor
     auto output = torch::zeros({batch_size, seq_len, d_model}, input.options());
 
-    // Launch kernel
     int threads = 256;
     int blocks = (total_elements + threads - 1) / threads;
 
-    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "chebyshev_fused_forward_cuda", ([&] {
-        chebyshev_fused_kernel<scalar_t><<<blocks, threads>>>(
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "fourier_fused_kernel", ([&] {
+        fourier_fused_kernel<scalar_t><<<blocks, threads>>>(
             input.data_ptr<scalar_t>(),
             output.data_ptr<scalar_t>(),
             max_seq_len,
@@ -62,7 +63,6 @@ std::vector<torch::Tensor> chebyshev_fused_forward_cuda(
         );
     }));
 
-    // Check for kernel errors
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA kernel failed : %s\n", cudaGetErrorString(err));
