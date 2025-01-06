@@ -65,16 +65,16 @@ class RotaryPositionEncoding(nn.Module):
         return (x * cos) + (x.roll(shifts=1, dims=-1) * sin)
 
 
-class DecomposedLinear(nn.Module):
+class MLP(nn.Module):
     """
-    Implements a decomposed linear layer with an intermediate activation.
+    Implements MLP with SiLU activation.
     """
 
     def __init__(self, in_features, out_features):
-        super(DecomposedLinear, self).__init__()
-        self.linear1 = nn.Linear(in_features, in_features // 4)
+        super(MLP, self).__init__()
+        self.linear1 = nn.Linear(in_features, in_features)
         self.activation = nn.SiLU()
-        self.linear2 = nn.Linear(in_features // 4, out_features)
+        self.linear2 = nn.Linear(in_features, out_features)
 
     def forward(self, x):
         x = self.linear1(x)
@@ -118,13 +118,13 @@ class AttentionBlock(nn.Module):
         self.attention_head_size = int(d_model / num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = DecomposedLinear(d_model, self.all_head_size)
-        self.key = DecomposedLinear(d_model, self.all_head_size)
-        self.value = DecomposedLinear(d_model, self.all_head_size)
+        self.query = MLP(d_model, self.all_head_size)
+        self.key = MLP(d_model, self.all_head_size)
+        self.value = MLP(d_model, self.all_head_size)
 
-        self.attn_out = DecomposedLinear(d_model, d_model)
+        self.attn_out = MLP(d_model, d_model)
         self.norm1 = RMSNorm(d_model)
-        self.bottleneck_mlp = DecomposedLinear(d_model, d_model)
+        self.bottleneck_mlp = MLP(d_model, d_model)
         self.norm2 = RMSNorm(d_model)
         self.rope = RotaryPositionEncoding(self.attention_head_size, max_seq_len)
 
@@ -194,7 +194,7 @@ class TAN(nn.Module):
     ):
         super(TAN, self).__init__()
         self.expansion = PolynomialBlock(vocab_size, d_model)
-        self.mlp = DecomposedLinear(d_model, d_model)
+        self.mlp = MLP(d_model, d_model)
         self.norm = RMSNorm(d_model)
 
         self.layers = nn.ModuleList(
@@ -211,7 +211,7 @@ class TAN(nn.Module):
         self.pooler = nn.Sequential(
             OrderedDict(
                 [
-                    ("dense", DecomposedLinear(d_model, d_model)),
+                    ("dense", MLP(d_model, d_model)),
                     ("activation", nn.Tanh()),
                 ]
             )
