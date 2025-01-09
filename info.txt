@@ -1,0 +1,66 @@
+TABLE 1: GLUE BENCHMARK, PARAMS & INFERENCE-TIME
+-------------------------------------------
+MODEL           Params  STS-B (no FT)
+-------------------------------------------
+TAN-Nano        396k+    75.0/75.2
+TAN-Micro       2.9m+    77.8/77.8
+TAN-Kilo        6.3m+    78.7/77.6
+-------------------------------------------
+BERT-Tiny       4m+      74.3/73.6
+BERT-Mini       11m+     75.4/73.3
+BERT-Small      29m+     78.8/77.0
+BERT-Medium     42m+     80.4/78.4
+SBERT-NLI-base  108m+    ----/77.0
+SBERT-NLI-large 340m+    ----/79.2 
+------------------------------------------
+
+TABLE 2: TRAINING PROGRESSIONS 
+
+
+1_128
+Num of params TAN: 231,552
+Num of params in Transformer: 4,125,312
+
+1_256
+Num of params TAN: 921,856
+Num of params in Transformer: 8,413,952
+
+1_512
+Num of params TAN: 3,678,720
+Num of params in Transformer: 17,482,752
+
+2_128 (TAN NANO)
+Num of params TAN: 396,928
+Num of params in Transformer: 4,323,328
+
+2_256
+Num of params TAN: 1,580,288
+Num of params in Transformer: 8,940,544
+
+2_512 (TAN KILO)
+Num of params TAN: 6,306,304
+Num of params in Transformer: 19,059,712
+
+4_128
+Num of params TAN: 727,680
+Num of params in Transformer: 4,719,360
+
+4_256 (TAN MICRO)
+Num of params TAN: 2,897,152
+Num of params in Transformer: 9,993,728
+
+4_512 
+Num of params TAN: 11,561,472
+Num of params in Transformer: 22,213,632
+
+8_128
+Num of params TAN: 1,389,184
+Num of params in Transformer: 5,511,424
+
+8_256
+Num of params TAN: 5,530,880
+Num of params in Transformer: 12,100,096
+
+8_512
+Num of params TAN: 22,071,808
+Num of params in Transformer: 28,521,472
