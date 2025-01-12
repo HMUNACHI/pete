@@ -21,6 +21,7 @@ from src.utils import timer
 class Experiment:
     def __init__(
         self,
+        args,
         vocab_size: int = 30552,
         d_model: int = 128,
         num_hidden_layers: int = 1,
@@ -52,6 +53,14 @@ class Experiment:
         self.train_datasets = train_datasets
         self.validation_datasets = validation_datasets
         self.train_baseline = train_baseline
+
+        benchmark_dataset = [
+            "mrpc", "stsb", "ax", "cola", "mnli", "rte", 
+            "qqp", "qnli", "sst2", "wnli", "paws", "snli"
+        ]
+
+        # if args.benchmark:
+        #     self.train_datasets = benchmark_dataset
 
         self.data = GlueDatasetLoader(
             tokenizer=self.tokenizer,
@@ -130,20 +139,32 @@ def benchmark(experiment):
     if not all_weights:
         raise ValueError(f"No weight files found in '{path_of_weights}'.")
 
-    for weight_file in all_weights:
-        model = experiment.tan_embedder.model
+    triples = zip(all_weights, [256, 128, 512], [4, 2, 2])
+
+    for weight_file, d_model, num_hidden in triples:
+
+        tan = TAN(
+            vocab_size=experiment.vocab_size,
+            d_model=d_model,
+            num_hidden_layers=num_hidden,
+            num_attention_heads=num_hidden,
+            max_seq_len=experiment.max_seq_len,
+        )
+
+        embedder = Embedder(tan)
+
         weight_path = os.path.join(path_of_weights, weight_file)
 
         try:
             state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
-            model.load_state_dict(state_dict)
+            embedder.load_state_dict(state_dict)
         except Exception as e:
             print(f"Error loading weights from '{weight_path}': {e}")
 
         name = os.path.splitext(weight_file)[0]
 
         try:
-            glue_benchmark(model, experiment, name)
+            glue_benchmark(embedder.model, experiment, name, d_model)
             print(f"Benchmark completed for weights: {name}")
         except Exception as e:
             print(f"Error during benchmarking with '{name}': {e}")
@@ -213,6 +234,7 @@ def main():
     for n in args.num_hidden_layers:
         for dim in args.d_model:
             experiment = Experiment(
+                args,
                 num_hidden_layers=n,
                 num_attention_heads=n,
                 d_model=dim,

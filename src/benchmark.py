@@ -1,11 +1,14 @@
 from enum import Enum
-from typing import List
+from typing import List, Dict
 
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.optim import AdamW
 from sklearn.manifold import TSNE
+
+from src.trainer import setup_scaler, setup_scheduler
 
 
 class Mode(Enum):
@@ -101,22 +104,18 @@ class Benchmarker(nn.Module):
     def regression_loss(
         self, preds: torch.Tensor, labels: torch.Tensor
     ) -> torch.Tensor:
-        # Mean Squared Error loss for regression tasks
         return F.mse_loss(preds, labels)
 
     def classification_scores(
         self, preds: torch.Tensor, labels: torch.Tensor, num_classes: int = 2
     ) -> torch.Tensor:
         if num_classes == 2:
-            # Binary classification using BCEWithLogitsLoss
             loss = F.binary_cross_entropy_with_logits(preds, labels.float())
         else:
-            # Multi-class classification using CrossEntropyLoss
             loss = F.cross_entropy(preds, labels.long())
         return loss
 
     def contrastive_loss(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-        # Contrastive loss computation
         a = F.normalize(a, p=2, dim=1)
         b = F.normalize(b, p=2, dim=1)
         similarity_matrix = (a @ b.T) / (self.temperature + 1e-12)
@@ -170,5 +169,101 @@ class Benchmarker(nn.Module):
         plt.show()
 
 
-def glue_benchmark(model, experiment, name):
-    print(model, experiment, name)
+def glue_benchmark(model, experiment, name, d_model):
+    benchmarker = Benchmarker(model, d_model)
+
+    optimizer = experiment.tan_optimizer = AdamW(
+        benchmarker.parameters(), lr=experiment.learning_rate
+    )
+
+    data = experiment.data
+    dataset_names = experiment.train_datasets
+
+    num_epochs = experiment.num_epochs
+    warmup_steps = experiment.warmup_steps
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    benchmarker.to(device)
+
+    total_steps_per_epoch = sum(
+        len(data.data_loaders[dataset_name]["train"])
+        for dataset_name in dataset_names
+        if "train" in data.data_loaders[dataset_name]
+    )
+    total_steps = total_steps_per_epoch * num_epochs
+
+    scheduler = setup_scheduler(optimizer, warmup_steps, total_steps)
+    scaler = setup_scaler()
+
+    global_step = 0
+
+    dataset_to_mode: Dict[str, Mode] = {
+        "mrpc": Mode.MRPC,
+        "stsb": Mode.STSB,
+        "ax": Mode.AX,
+        "cola": Mode.COLA,
+        "mnli": Mode.MNLI,
+        "rte": Mode.RTE,
+        "qqp": Mode.QQP,
+        "qnli": Mode.QNLI,
+        "sst2": Mode.SST2,
+        "wnli": Mode.WNLI,
+        "paws": Mode.PAWS,
+        "snli": Mode.SNLI,
+    }
+
+    for epoch in range(num_epochs):
+        print(f"\nEpoch {epoch + 1}/{num_epochs}")
+
+        for dataset_name in dataset_names:
+            if dataset_name not in dataset_to_mode:
+                raise ValueError(f"Dataset name '{dataset_name}' is not supported.")
+
+            mode = dataset_to_mode[dataset_name]
+            benchmarker.train()
+            total_train_loss = 0.0
+            train_loader = data.data_loaders[dataset_name]["train"]
+
+            val_split_keys = [
+                key
+                for key in data.data_loaders[dataset_name].keys()
+                if "validation" in key
+            ]
+            val_loader = None
+            if val_split_keys:
+                val_loader_key = val_split_keys[0]
+                val_loader = data.data_loaders[dataset_name][val_loader_key]
+
+            for batch in train_loader:
+                batch = tuple(t.to(device) for t in batch)
+                optimizer.zero_grad()
+
+                with torch.autocast(device_type=device, dtype=torch.float16):
+                    train_loss = benchmarker(batch, mode)  
+
+                scaler.scale(train_loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+                total_train_loss += train_loss.item()
+                global_step += 1
+
+            avg_train_loss = total_train_loss / len(train_loader)
+            print(f"{name} on {dataset_name} Train Loss: {avg_train_loss:.4f}")
+
+            if val_loader is not None:
+                benchmarker.eval()
+                total_val_loss = 0.0
+
+                with torch.no_grad():
+                    with torch.autocast(device_type=device, dtype=torch.float16):
+                        for batch in val_loader:
+                            batch = tuple(t.to(device) for t in batch)
+                            val_loss = benchmarker(batch, mode)  # Pass mode here
+                            total_val_loss += val_loss.item()
+
+                avg_val_loss = total_val_loss / (len(val_loader) + 1e-6)
+                print(f"{name} on {dataset_name} Val Loss: {avg_val_loss:.4f}")
+
+    print("Benchmarking completed.")
