@@ -146,7 +146,9 @@ class AttentionBlock(nn.Module):
             attention_mask = attention_mask == 1
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
             scaled_dot_product = torch.where(
-                attention_mask, scaled_dot_product, torch.tensor(float("-inf"), device=q.device)
+                attention_mask,
+                scaled_dot_product,
+                torch.tensor(float("-inf"), device=q.device),
             )
 
         attention_weights = nn.functional.softmax(scaled_dot_product, dim=-1)
@@ -218,7 +220,7 @@ class TAN(nn.Module):
         )
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor = None):
-        x_polynomials = self.expansion(input_ids) 
+        x_polynomials = self.expansion(input_ids)
         x = self.norm(self.mlp(x_polynomials) + x_polynomials)
 
         for AttentionBlock in self.layers:

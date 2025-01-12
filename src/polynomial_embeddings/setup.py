@@ -14,7 +14,6 @@ setup(
                 "legendre_kernel.cu",
                 "fourier_kernel.cu",
             ],
-
         )
     ],
     cmdclass={"build_ext": BuildExtension},

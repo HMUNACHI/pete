@@ -9,6 +9,7 @@ from transformers import AutoTokenizer
 torch.manual_seed(0)
 np.random.seed(0)
 
+from src.benchmark import glue_benchmark
 from src.data import GlueDatasetLoader
 from src.embedder import Embedder
 from src.tan import TAN
@@ -64,7 +65,7 @@ class Experiment:
             d_model=self.d_model,
             num_hidden_layers=self.num_hidden_layers,
             num_attention_heads=self.num_attention_heads,
-            max_seq_len=self.max_seq_len
+            max_seq_len=self.max_seq_len,
         )
         self.tan_embedder = Embedder(tan)
         self.tan_optimizer = AdamW(
@@ -105,7 +106,7 @@ def run(experiment):
                 experiment,
                 name,
             )
-        # glue_benchmark(transformer_embedder.model, experiment, name)
+        glue_benchmark(transformer_embedder.model, experiment, name)
 
     print("\nTraining TAN\n")
     name = f"TAN_{experiment.num_hidden_layers}_{experiment.d_model}"
@@ -113,7 +114,39 @@ def run(experiment):
         tan_embedder = train(
             experiment.tan_embedder, experiment.tan_optimizer, experiment, name
         )
-    # glue_benchmark(tan_embedder.model, experiment, name)
+    glue_benchmark(tan_embedder.model, experiment, name)
+
+
+def benchmark(experiment):
+    path_of_weights = "weights"
+
+    if not os.path.isdir(path_of_weights):
+        raise FileNotFoundError(f"The directory '{path_of_weights}' does not exist.")
+
+    all_weights = [
+        f for f in os.listdir(path_of_weights) if f.endswith((".pt", ".pth"))
+    ]
+
+    if not all_weights:
+        raise ValueError(f"No weight files found in '{path_of_weights}'.")
+
+    for weight_file in all_weights:
+        model = experiment.tan_embedder.model
+        weight_path = os.path.join(path_of_weights, weight_file)
+
+        try:
+            state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
+            model.load_state_dict(state_dict)
+        except Exception as e:
+            print(f"Error loading weights from '{weight_path}': {e}")
+
+        name = os.path.splitext(weight_file)[0]
+
+        try:
+            glue_benchmark(model, experiment, name)
+            print(f"Benchmark completed for weights: {name}")
+        except Exception as e:
+            print(f"Error during benchmarking with '{name}': {e}")
 
 
 def main():
@@ -161,6 +194,11 @@ def main():
         help="Whether to train the baseline Transformer.",
     )
     parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="if to benchmark on glue",
+    )
+    parser.add_argument(
         "--dropout-prob", type=float, default=0.2, help="Dropout probability."
     )
     parser.add_argument(
@@ -189,9 +227,13 @@ def main():
                 max_seq_len=args.max_seq_len,
                 vocab_size=args.vocab_size,
             )
-            run(experiment)
+
+            if args.benchmark:
+                benchmark(experiment)
+            else:
+                run(experiment)
+                os.system("tensorboard --logdir=runs")
 
 
 if __name__ == "__main__":
     main()
-    os.system('tensorboard --logdir=runs')

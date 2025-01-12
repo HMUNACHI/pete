@@ -74,11 +74,11 @@ def setup_scheduler(optimizer, warmup_steps: int, total_steps: int):
 
 def setup_scaler() -> GradScaler:
     return GradScaler(
-        init_scale=2.0**16,       # Initial scale (default: 2^16)
-        growth_factor=2.0,        # Factor to increase the scale (default: 2.0)
-        backoff_factor=0.5,       # Factor to decrease the scale (default: 0.5)
-        growth_interval=2000,     # Steps before increasing the scale (default: 2000)
-        enabled=True              # Enable or disable the scaler (default: True)
+        init_scale=2.0**16,  # Initial scale (default: 2^16)
+        growth_factor=2.0,  # Factor to increase the scale (default: 2.0)
+        backoff_factor=0.5,  # Factor to decrease the scale (default: 0.5)
+        growth_interval=2000,  # Steps before increasing the scale (default: 2000)
+        enabled=True,  # Enable or disable the scaler (default: True)
     )
 
 

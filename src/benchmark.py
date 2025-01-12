@@ -1,24 +1,27 @@
+from enum import Enum
 from typing import List
+
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.manifold import TSNE
-from enum import Enum
+
 
 class Mode(Enum):
-    MRPC = 'mrpc'
-    STSB = 'stsb'
-    AX = 'ax'
-    COLA = 'cola'
-    MNLI = 'mnli'
-    RTE = 'rte'
-    QQP = 'qqp'
-    QNLI = 'qnli'
-    SST2 = 'sst2'
-    WNLI = 'wnli'
-    PAWS = 'paws'
-    SNLI = 'snli'
+    MRPC = "mrpc"
+    STSB = "stsb"
+    AX = "ax"
+    COLA = "cola"
+    MNLI = "mnli"
+    RTE = "rte"
+    QQP = "qqp"
+    QNLI = "qnli"
+    SST2 = "sst2"
+    WNLI = "wnli"
+    PAWS = "paws"
+    SNLI = "snli"
+
 
 class Benchmarker(nn.Module):
     def __init__(self, model, d_model):
@@ -40,8 +43,12 @@ class Benchmarker(nn.Module):
         if mode == Mode.STSB:
             # Regression task (STS-B)
             input_ids1, attention_mask1, input_ids2, attention_mask2, labels = batch
-            embeddings1 = self.model(input_ids=input_ids1, attention_mask=attention_mask1)[1]
-            embeddings2 = self.model(input_ids=input_ids2, attention_mask=attention_mask2)[1]
+            embeddings1 = self.model(
+                input_ids=input_ids1, attention_mask=attention_mask1
+            )[1]
+            embeddings2 = self.model(
+                input_ids=input_ids2, attention_mask=attention_mask2
+            )[1]
             combined = torch.abs(embeddings1 - embeddings2)
             preds = self.regressor(combined).squeeze()
             loss = self.regression_loss(preds, labels)
@@ -50,7 +57,9 @@ class Benchmarker(nn.Module):
         elif mode in [Mode.SST2, Mode.COLA]:
             # Single-sentence binary classification tasks
             input_ids, attention_mask, labels = batch
-            embeddings = self.model(input_ids=input_ids, attention_mask=attention_mask)[1]
+            embeddings = self.model(input_ids=input_ids, attention_mask=attention_mask)[
+                1
+            ]
             preds = self.binary_classifier(embeddings).squeeze()
             loss = self.classification_scores(preds, labels)
             return loss
@@ -58,8 +67,12 @@ class Benchmarker(nn.Module):
         elif mode in [Mode.MRPC, Mode.QQP, Mode.QNLI, Mode.RTE, Mode.WNLI, Mode.PAWS]:
             # Sentence-pair binary classification tasks
             input_ids1, attention_mask1, input_ids2, attention_mask2, labels = batch
-            embeddings1 = self.model(input_ids=input_ids1, attention_mask=attention_mask1)[1]
-            embeddings2 = self.model(input_ids=input_ids2, attention_mask=attention_mask2)[1]
+            embeddings1 = self.model(
+                input_ids=input_ids1, attention_mask=attention_mask1
+            )[1]
+            embeddings2 = self.model(
+                input_ids=input_ids2, attention_mask=attention_mask2
+            )[1]
             combined = torch.abs(embeddings1 - embeddings2)
             preds = self.binary_classifier(combined).squeeze()
             loss = self.classification_scores(preds, labels)
@@ -68,10 +81,16 @@ class Benchmarker(nn.Module):
         elif mode in [Mode.MNLI, Mode.SNLI]:
             # Sentence-pair multi-class classification tasks
             input_ids1, attention_mask1, input_ids2, attention_mask2, labels = batch
-            embeddings1 = self.model(input_ids=input_ids1, attention_mask=attention_mask1)[1]
-            embeddings2 = self.model(input_ids=input_ids2, attention_mask=attention_mask2)[1]
+            embeddings1 = self.model(
+                input_ids=input_ids1, attention_mask=attention_mask1
+            )[1]
+            embeddings2 = self.model(
+                input_ids=input_ids2, attention_mask=attention_mask2
+            )[1]
             # Concatenate embeddings and their absolute difference
-            combined = torch.cat([embeddings1, embeddings2, torch.abs(embeddings1 - embeddings2)], dim=1)
+            combined = torch.cat(
+                [embeddings1, embeddings2, torch.abs(embeddings1 - embeddings2)], dim=1
+            )
             preds = self.multi_classifier(combined)
             loss = self.classification_scores(preds, labels, num_classes=3)
             return loss
@@ -79,11 +98,15 @@ class Benchmarker(nn.Module):
         else:
             raise ValueError(f"Unsupported mode: {mode}")
 
-    def regression_loss(self, preds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    def regression_loss(
+        self, preds: torch.Tensor, labels: torch.Tensor
+    ) -> torch.Tensor:
         # Mean Squared Error loss for regression tasks
         return F.mse_loss(preds, labels)
 
-    def classification_scores(self, preds: torch.Tensor, labels: torch.Tensor, num_classes: int = 2) -> torch.Tensor:
+    def classification_scores(
+        self, preds: torch.Tensor, labels: torch.Tensor, num_classes: int = 2
+    ) -> torch.Tensor:
         if num_classes == 2:
             # Binary classification using BCEWithLogitsLoss
             loss = F.binary_cross_entropy_with_logits(preds, labels.float())
@@ -98,8 +121,9 @@ class Benchmarker(nn.Module):
         b = F.normalize(b, p=2, dim=1)
         similarity_matrix = (a @ b.T) / (self.temperature + 1e-12)
         labels = torch.arange(similarity_matrix.shape[0]).to(similarity_matrix.device)
-        return F.cross_entropy(similarity_matrix, labels) + F.cross_entropy(similarity_matrix.T, labels)
-
+        return F.cross_entropy(similarity_matrix, labels) + F.cross_entropy(
+            similarity_matrix.T, labels
+        )
 
     def embed(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor
@@ -144,3 +168,7 @@ class Benchmarker(nn.Module):
         plt.ylabel("Dimension 2")
         plt.grid(True)
         plt.show()
+
+
+def glue_benchmark(model, experiment, name):
+    print(model, experiment, name)
