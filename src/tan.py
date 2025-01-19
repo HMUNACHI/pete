@@ -72,9 +72,9 @@ class MLP(nn.Module):
 
     def __init__(self, in_features, out_features):
         super(MLP, self).__init__()
-        self.linear1 = nn.Linear(in_features, in_features // 4)
+        self.linear1 = nn.Linear(in_features, in_features)
         self.activation = nn.SiLU()
-        self.linear2 = nn.Linear(in_features // 4, out_features)
+        self.linear2 = nn.Linear(in_features, out_features)
 
     def forward(self, x):
         x = self.linear1(x)
