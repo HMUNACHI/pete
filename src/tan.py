@@ -70,11 +70,11 @@ class MLP(nn.Module):
     Implements a decomposed linear layer with an intermediate activation.
     """
 
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features, out_features, bottleneck_degree=1):
         super(MLP, self).__init__()
-        self.linear1 = nn.Linear(in_features, in_features)
+        self.linear1 = nn.Linear(in_features, in_features // bottleneck_degree)
         self.activation = nn.SiLU()
-        self.linear2 = nn.Linear(in_features, out_features)
+        self.linear2 = nn.Linear(in_features // bottleneck_degree, out_features)
 
     def forward(self, x):
         x = self.linear1(x)
