@@ -198,6 +198,11 @@ class TAN(nn.Module):
         self.expansion = PolynomialBlock(vocab_size, d_model)
         self.mlp = MLP(d_model, d_model)
         self.norm = RMSNorm(d_model)
+        self.d_model = d_model
+        self.num_hidden_layers = num_hidden_layers
+        self.num_attention_heads = num_attention_heads
+        self.max_seq_len = max_seq_len
+        self.vocab_size = vocab_size
 
         self.layers = nn.ModuleList(
             [

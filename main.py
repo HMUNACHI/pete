@@ -4,14 +4,14 @@ import os
 import numpy as np
 import torch
 from torch.optim import AdamW
-from transformers import AutoTokenizer
+from transformers import BertTokenizer
 
 torch.manual_seed(0)
 np.random.seed(0)
 
-from src.benchmark import glue_benchmark
 from src.data import GlueDatasetLoader
-from src.embedder import Embedder
+# from src.embedder import Embedder
+from src.benchmark.stsb import STSBWrapper as Embedder
 from src.tan import TAN
 from src.trainer import train
 from src.transformer import Transformer
@@ -44,7 +44,7 @@ class Experiment:
         self.hidden_dropout_prob = dropout_prob
         self.attention_probs_dropout_prob = dropout_prob
         self.max_seq_len = max_seq_len
-        self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.batch_size = batch_size
         self.num_epochs = num_epochs
@@ -232,11 +232,8 @@ def main():
                 vocab_size=args.vocab_size,
             )
 
-            if args.benchmark:
-                benchmark(experiment)
-            else:
-                run(experiment)
-                os.system("tensorboard --logdir=runs")
+            run(experiment)
+            # os.system("tensorboard --logdir=runs")
 
 
 if __name__ == "__main__":

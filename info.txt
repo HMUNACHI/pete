@@ -2,34 +2,16 @@ TABLE 1: GLUE BENCHMARK, PARAMS & INFERENCE-TIME
 ------------------------------------
 MODEL             Params   STS-B 
 ------------------------------------
-TAN-Atomic        58k+     69.1/69.3
-TAN-Nano          396k+    75.3/75.3
-TAN-Micro         1.5m+    78.1/78.2
-TAN-Milli         3.6m+    78.9/78.9
+TAN-Atomic        58k+     69.0/69.5
+TAN-Nano          396k+    78.0/78.0
+TAN-Micro         1.5m+    79.7/79.7
+TAN-Milli         3.6m+    81.7/81.9
 BERT-Tiny         4m+      74.3/73.6
 BERT-Mini         11m+     75.4/73.3
+TinyBERT          14.5m     -- /80.4
+MobileBert-Tiny   15.1m     -- /80.1
 BERT-Small        29m+     78.8/77.0
 ------------------------------------
-
-
-TABLE 1: GLUE BENCHMARK, PARAMS & INFERENCE-TIME
-------------------------------------
-MODEL             Params   STS-B 
-------------------------------------
-TAN-Nano          396k+    75.3/75.3
-Transforer-Nano   4.3m+    76.8/76.7
-BERT-Tiny         4m+      74.3/73.6
-------------------------------------
-TAN-Micro         1.5m+    78.1/78.2
-Transformer-Micro 8.9m+    80.2/80.1
-BERT-Mini         11m+     75.4/73.3
-------------------------------------
-TAN-Milli         3.6m+    78.9/78.9
-Transformer-Milli 17m+     80.8/80.8
-BERT-Small        29m+     78.8/77.0
-------------------------------------
-TAN-Atom          58k+     66.5/67.0
-Treansformer-Atom 58k+     65.4/66.0
 
 
 1_128

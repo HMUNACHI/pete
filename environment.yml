@@ -1,4 +1,4 @@
-name: env
+name: tan_env
 channels:
   - nvidia
   - conda-forge

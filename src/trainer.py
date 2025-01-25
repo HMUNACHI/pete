@@ -6,52 +6,12 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn.functional as F
-from scipy.stats import pearsonr, spearmanr
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from transformers import get_linear_schedule_with_warmup
 
-
-def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    dot_product = torch.einsum("ij,kj->ik", a, b)
-    norm_a = torch.sqrt(torch.einsum("ij,ij->i", a, a))
-    norm_b = torch.sqrt(torch.einsum("ij,ij->i", b, b))
-    norm_product = torch.einsum("i,j->ij", norm_a, norm_b)
-    return dot_product / norm_product
-
-
-def evaluate(
-    model: torch.nn.Module,
-    data_loader: Dict[str, torch.utils.data.DataLoader],
-    device: torch.device,
-) -> List[float]:
-    model.to(device)
-    model.eval()
-    vectors_one = []
-    vectors_two = []
-    labels = []
-
-    with torch.no_grad():
-        with torch.autocast(device_type="cuda", dtype=torch.float16):
-            for batch in data_loader["stsb"]["validation"]:
-                embeddings1 = model(
-                    input_ids=batch[0].to(device), attention_mask=batch[1].to(device)
-                )[1]
-                embeddings2 = model(
-                    input_ids=batch[2].to(device), attention_mask=batch[3].to(device)
-                )[1]
-                vectors_one.append(embeddings1.cpu().float())
-                vectors_two.append(embeddings2.cpu().float())
-                labels.extend(batch[4].cpu().numpy())
-
-    vectors_one = torch.cat(vectors_one)
-    vectors_two = torch.cat(vectors_two)
-    labels = np.array(labels)
-    similarities = cosine_sim(vectors_one, vectors_two).numpy().diagonal()
-    eval_pearson_cosine, _ = pearsonr(similarities, labels)
-    eval_spearman_cosine, _ = spearmanr(similarities, labels)
-    return [eval_pearson_cosine, eval_spearman_cosine]
+from src.benchmark.stsb import evaluate
 
 
 def initialize_writer(name: str, is_master: bool) -> Optional[SummaryWriter]:
@@ -132,6 +92,11 @@ def train_loop(
             embedder.train()
             total_train_loss = 0.0
             train_loader = data.data_loaders[dataset_name]["train"]
+
+            if epoch == 0 and writer and rank == 0:
+                model_to_evaluate = embedder.module if is_ddp else embedder
+                results = evaluate(model_to_evaluate.model, data.data_loaders, device)
+                print(f"{dataset_name} Validation Before Fine-Tuning: {results}")
 
             if is_ddp:
                 train_loader.sampler.set_epoch(epoch)
@@ -218,7 +183,7 @@ def train_loop(
                 # For DDP, use the underlying model
                 model_to_evaluate = embedder.module if is_ddp else embedder
                 results = evaluate(model_to_evaluate.model, data.data_loaders, device)
-                print(f"{dataset_name} STSB Validation: {results}")
+                print(f"{dataset_name} Validation: {results}")
 
                 log_metrics(writer, dataset_name, "pearsonr", results[0], global_step)
                 log_metrics(writer, dataset_name, "spearmanr", results[1], global_step)
@@ -234,6 +199,11 @@ def train_loop(
 
         if rank == 0:
             print("")
+
+    if writer and rank == 0:
+        # For DDP, use the underlying model
+        model_to_evaluate = embedder.module if is_ddp else embedder
+        evaluate(model_to_evaluate, data.data_loaders, device, test=True)
 
     return embedder
 
