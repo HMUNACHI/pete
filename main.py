@@ -59,8 +59,24 @@ class Experiment:
             "qqp", "qnli", "sst2", "wnli", "paws", "snli"
         ]
 
-        # if args.benchmark:
-        #     self.train_datasets = benchmark_dataset
+        if args.config == "atomic":
+            self.num_attention_heads = 1
+            self.num_hidden_layers = 1
+            self.d_model = 64
+        elif args.config == "nano":
+            self.num_attention_heads = 2
+            self.num_hidden_layers = 2
+            self.d_model = 128
+        elif args.config == "micro":
+            self.num_attention_heads = 2
+            self.num_hidden_layers = 2
+            self.d_model = 256
+        elif args.config == "milli":
+            self.num_attention_heads = 1
+            self.num_hidden_layers = 1
+            self.d_model = 512
+        else:
+            raise ValueError(f"No configuration called '{args.config}'.")
 
         self.data = GlueDatasetLoader(
             tokenizer=self.tokenizer,
@@ -76,13 +92,15 @@ class Experiment:
             num_attention_heads=self.num_attention_heads,
             max_seq_len=self.max_seq_len,
         )
+
+        if args.pretrained:
+            weight_path = os.path.join("pretrained_weights", "tan_" + args.config + ".pt")
+            state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
+            tan.load_state_dict(state_dict)
+
         self.tan_embedder = Embedder(tan)
-        self.tan_optimizer = AdamW(
-            self.tan_embedder.parameters(), lr=self.learning_rate
-        )
-        print(
-            f"\nNum of params TAN: {sum(p.numel() for p in tan.parameters() if p.requires_grad)}"
-        )
+        self.tan_optimizer = AdamW(self.tan_embedder.parameters(), lr=self.learning_rate)
+        print(f"\nNum of params TAN: {sum(p.numel() for p in tan.parameters() if p.requires_grad)}")
 
         if self.train_baseline:
             transformer = Transformer(
@@ -115,7 +133,6 @@ def run(experiment):
                 experiment,
                 name,
             )
-        glue_benchmark(transformer_embedder.model, experiment, name)
 
     print("\nTraining TAN\n")
     name = f"TAN_{experiment.num_hidden_layers}_{experiment.d_model}"
@@ -123,51 +140,6 @@ def run(experiment):
         tan_embedder = train(
             experiment.tan_embedder, experiment.tan_optimizer, experiment, name
         )
-    glue_benchmark(tan_embedder.model, experiment, name)
-
-
-def benchmark(experiment):
-    path_of_weights = "weights"
-
-    if not os.path.isdir(path_of_weights):
-        raise FileNotFoundError(f"The directory '{path_of_weights}' does not exist.")
-
-    all_weights = [
-        f for f in os.listdir(path_of_weights) if f.endswith((".pt", ".pth"))
-    ]
-
-    if not all_weights:
-        raise ValueError(f"No weight files found in '{path_of_weights}'.")
-
-    triples = zip(all_weights, [256, 128, 512], [4, 2, 2])
-
-    for weight_file, d_model, num_hidden in triples:
-
-        tan = TAN(
-            vocab_size=experiment.vocab_size,
-            d_model=d_model,
-            num_hidden_layers=num_hidden,
-            num_attention_heads=num_hidden,
-            max_seq_len=experiment.max_seq_len,
-        )
-
-        embedder = Embedder(tan)
-
-        weight_path = os.path.join(path_of_weights, weight_file)
-
-        try:
-            state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
-            embedder.load_state_dict(state_dict)
-        except Exception as e:
-            print(f"Error loading weights from '{weight_path}': {e}")
-
-        name = os.path.splitext(weight_file)[0]
-
-        try:
-            glue_benchmark(embedder.model, experiment, name, d_model)
-            print(f"Benchmark completed for weights: {name}")
-        except Exception as e:
-            print(f"Error during benchmarking with '{name}': {e}")
 
 
 def main():
@@ -204,6 +176,11 @@ def main():
         help="List of training datasets.",
     )
     parser.add_argument(
+        "--config",
+        default="atomic",
+        help="one of the following configs; atomic, nano, micro, milli",
+    )
+    parser.add_argument(
         "--validation-datasets",
         nargs="+",
         default=["stsb"],
@@ -213,6 +190,11 @@ def main():
         "--train-baseline",
         action="store_true",
         help="Whether to train the baseline Transformer.",
+    )
+    parser.add_argument(
+        "--pretrained",
+        action="store_true",
+        help="Whether to load pretrained configuration",
     )
     parser.add_argument(
         "--benchmark",
