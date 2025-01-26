@@ -167,7 +167,7 @@ def run_benchmark(args):
 
             experiment = Experiment(
                     args,
-                    num_epochs=2,
+                    num_epochs=args.num_epochs,
                     batch_size=64,
                     learning_rate=2e-5,
                     warmup_steps=args.warmup_steps,
@@ -179,6 +179,7 @@ def run_benchmark(args):
                     vocab_size=args.vocab_size,
                     num_outputs=num_outputs,
                     num_sentences=num_sentences,
+                    num_epochs=100,
                 )
 
             run(experiment, config)
