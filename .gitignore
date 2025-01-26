@@ -103,6 +103,7 @@ ipython_config.py
 env/
 venv/
 ENV/
+weights/
 
 # Spyder project settings
 .spyderproject

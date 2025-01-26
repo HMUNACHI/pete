@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from scipy.stats import pearsonr, spearmanr
+import pandas as pd
+import os
 
 from sklearn.metrics import (
     f1_score,
@@ -121,6 +123,20 @@ def pearson_r(x: torch.Tensor, y: torch.Tensor, eps: float = 1e-8) -> torch.Tens
     return numerator / (denominator + eps)
 
 
+GLUE_LABEL_MAPS = {
+    "cola": {0: "unacceptable", 1: "acceptable"},
+    "sst2": {0: "negative", 1: "positive"},
+    "mrpc": {0: "not_equivalent", 1: "equivalent"},
+    "qqp":  {0: "not_duplicate", 1: "duplicate"},
+    "mnli": {0: "contradiction", 1: "entailment", 2: "neutral"},
+    "qnli": {0: "entailment", 1: "not_entailment"},
+    "rte":  {0: "entailment", 1: "not_entailment"},
+    "wnli": {0: "not_entailment", 1: "entailment"},
+    # STS-B: regression, so there's no label map (use None).
+    "stsb": None
+}
+
+
 def evaluate(
     model: nn.Module,
     data_loader: Dict[str, torch.utils.data.DataLoader],
@@ -128,13 +144,29 @@ def evaluate(
     dataset_name: str,
     run_name: str,
     test: bool = False,
+    glue_submission: bool = True
 ) -> Optional[Dict[str, float]]:
+    """
+    Evaluate or run inference on a model for a given dataset (train/validation/test).
+    
+    If 'test' is True, loads the model from weights/<run_name>.pt, obtains predictions on
+    the test set, and saves results to:
+      - results/<dataset_name>_<run_name>.npy        (raw predictions)
+      - results/<dataset_name>_<run_name>.tsv        (GLUE-submission format, if glue_submission=True)
 
+    Otherwise, evaluates on the 'validation' set and returns metrics (accuracy, precision, f1, mcc).
+    For STS-B, returns the Spearman correlation using the spearman_evaluate function above.
+    """
     model.to(device)
     model.eval()
 
     if test:
+        # ====================
+        # Inference on Test
+        # ====================
         all_predictions = []
+
+        # Load trained weights
         weight_path = f"weights/{run_name}.pt"
         state_dict = torch.load(weight_path, map_location=device)
         model.load_state_dict(state_dict)
@@ -147,11 +179,40 @@ def evaluate(
                     all_predictions.append(preds)
 
         all_predictions = np.concatenate(all_predictions, axis=0)
-        file_path = f"results/{run_name}.npy"
-        np.save(file_path, all_predictions)
-        print(f"Test predictions saved to {file_path}")
-        return
 
+        if glue_submission:
+            label_map = GLUE_LABEL_MAPS.get(dataset_name, None)
+
+            if label_map is None:
+                # STS-B or unsupported -> treat as regression (float) or direct output
+                # For STS-B, each row is just a float. Typical GLUE submission:
+                #   index [TAB] prediction
+                df = pd.DataFrame({
+                    "index": range(len(all_predictions)), 
+                    "prediction": all_predictions.reshape(-1)
+                })
+            else:
+                # Classification -> map integer predictions to string labels
+                # If model outputs shape = (N,) or (N,1), ensure it’s flattened
+                all_predictions = all_predictions.reshape(-1)
+                
+                # Map each integer prediction to a string label
+                # e.g., [0,1,2] -> ["contradiction","entailment","neutral"]
+                str_labels = [label_map[int(p)] for p in all_predictions]
+                df = pd.DataFrame({
+                    "index": range(len(str_labels)), 
+                    "prediction": str_labels
+                })
+            
+            tsv_path = f"results/{dataset_name}_{run_name}.tsv"
+            df.to_csv(tsv_path, sep="\t", index=False)
+            print(f"GLUE-style TSV submission saved to {tsv_path}")
+
+        return 
+
+    # =====================
+    # Evaluation on Val
+    # =====================
     all_preds = []
     all_labels = []
 

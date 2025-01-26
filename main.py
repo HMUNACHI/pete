@@ -34,6 +34,8 @@ class Experiment:
         train_datasets: list = ["snli", "mnli"],
         validation_datasets: list = ["stsb"],
         include_baseline=False,
+        num_outputs=None,
+        num_sentences=None,
     ):
 
         self.vocab_size = vocab_size
@@ -92,7 +94,7 @@ class Experiment:
             state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
             tan.load_state_dict(state_dict)
 
-        self.tan_embedder = Embedder(tan)
+        self.tan_embedder = Embedder(tan, num_outputs, num_sentences)
         self.tan_optimizer = AdamW(self.tan_embedder.parameters(), lr=self.learning_rate)
         print(f"\nNum of params TAN: {sum(p.numel() for p in tan.parameters() if p.requires_grad)}")
 
@@ -113,7 +115,7 @@ class Experiment:
                 state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
                 transformer.load_state_dict(state_dict)
 
-            self.transformer_embedder = Embedder(transformer)
+            self.transformer_embedder = Embedder(transformer, num_outputs, num_sentences)
             self.transformer_optimizer = AdamW(
                 self.transformer_embedder.parameters(), lr=self.learning_rate
             )
@@ -145,24 +147,29 @@ def run(experiment, suffix=None):
         )
 
 def run_benchmark(args):
-    benchmark_datasets = [
-        "stsb", 
-        "rte", "wnli", "qnli", "sst2", "qqp", "mrpc", "qnli", "wnli", 
-        "mnli", "cola", "ax" 
-        "boolq", 
-        "axg", "axb", "copa", 
-    ]
+    # Datasets:[num_outputs, num_sentences]
+    benchmark_datasets = {
+        "stsb":[0,2], 
+        "rte":[2,2], "mrpc":[2,2], "qqp":[2,2], "qnli":[2,2], # "wnli":[2,2], 
+        "mnli":[3,2], # "ax":[3,2],
+        "cola":[2,1], "sst2":[2,1],
+
+        "boolq":[2,2], "axb":[2,2], "axg":[2,2], 
+        "cb":[3,2],
+        "copa":[2,3],
+    }
 
     configs = ["atomic", "nano", "micro", "milli"]
 
     for config in configs:
-        for dataset in benchmark_datasets:
+        for dataset, info in benchmark_datasets.items():
+            num_outputs, num_sentences = info
 
             experiment = Experiment(
                     args,
-                    num_epochs=args.num_epochs,
+                    num_epochs=2,
                     batch_size=64,
-                    learning_rate=0.00001,
+                    learning_rate=2e-5,
                     warmup_steps=args.warmup_steps,
                     train_datasets=[dataset],
                     validation_datasets=[dataset],
@@ -170,6 +177,8 @@ def run_benchmark(args):
                     dropout_prob=args.dropout_prob,
                     max_seq_len=args.max_seq_len,
                     vocab_size=args.vocab_size,
+                    num_outputs=num_outputs,
+                    num_sentences=num_sentences,
                 )
 
             run(experiment, config)

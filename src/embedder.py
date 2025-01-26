@@ -8,7 +8,7 @@ from sklearn.manifold import TSNE
 
 
 class Embedder(nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, num_outputs, num_sentences):
         super(Embedder, self).__init__()
         self.model = model
         self.temperature = nn.Parameter(torch.tensor([0.07]))
