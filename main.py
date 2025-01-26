@@ -179,7 +179,6 @@ def run_benchmark(args):
                     vocab_size=args.vocab_size,
                     num_outputs=num_outputs,
                     num_sentences=num_sentences,
-                    num_epochs=100,
                 )
 
             run(experiment, config)
