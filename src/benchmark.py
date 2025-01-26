@@ -1,17 +1,13 @@
+import os
 from typing import Dict, Optional
+
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from scipy.stats import pearsonr, spearmanr
-import pandas as pd
-import os
-
-from sklearn.metrics import (
-    f1_score,
-    precision_score,
-    matthews_corrcoef
-)
+from sklearn.metrics import f1_score, matthews_corrcoef, precision_score
 
 from src.tan import MLP
 
@@ -46,7 +42,7 @@ class GLUEWrapper(nn.Module):
 
         if self.num_outputs == 0:
             return self.correlation_loss(anchors, positives, labels)
-        
+
         return self.classification_loss(anchors, positives, labels)
 
     def forward_one_sentence(self, batch: torch.Tensor) -> torch.Tensor:
@@ -60,22 +56,20 @@ class GLUEWrapper(nn.Module):
         return self.classification_predictions(batch)
 
     def classification_loss(
-            self, 
-            sentence1: torch.Tensor, 
-            sentence2: torch.Tensor, 
-            ground_truth: torch.Tensor
-        ) -> torch.Tensor:
+        self,
+        sentence1: torch.Tensor,
+        sentence2: torch.Tensor,
+        ground_truth: torch.Tensor,
+    ) -> torch.Tensor:
 
         combined_rep = torch.cat([sentence1, sentence2], dim=-1)
-        logits = self.classifier(combined_rep) 
+        logits = self.classifier(combined_rep)
         return F.cross_entropy(logits, ground_truth)
 
     def classification_loss_one_sentence(
-            self, 
-            sentence: torch.Tensor,
-            ground_truth: torch.Tensor
-        ) -> torch.Tensor:
-        logits = self.classifier(sentence) 
+        self, sentence: torch.Tensor, ground_truth: torch.Tensor
+    ) -> torch.Tensor:
+        logits = self.classifier(sentence)
         return F.cross_entropy(logits, ground_truth)
 
     def classification_predictions(self, batch: torch.Tensor) -> torch.Tensor:
@@ -89,11 +83,11 @@ class GLUEWrapper(nn.Module):
         return preds
 
     def correlation_loss(
-            self, 
-            sentence1: torch.Tensor, 
-            sentence2: torch.Tensor, 
-            ground_truth: torch.Tensor
-        ) -> torch.Tensor:
+        self,
+        sentence1: torch.Tensor,
+        sentence2: torch.Tensor,
+        ground_truth: torch.Tensor,
+    ) -> torch.Tensor:
 
         similarities = cosine_sim(sentence1, sentence2).diagonal()
         predicted_correlation = pearson_r(similarities, ground_truth)
@@ -103,7 +97,7 @@ class GLUEWrapper(nn.Module):
         sentence1 = self.model(input_ids=batch[0], attention_mask=batch[1])[1]
         sentence2 = self.model(input_ids=batch[2], attention_mask=batch[3])[1]
         return cosine_sim(sentence1, sentence2).diagonal()
-    
+
 
 def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     dot_product = torch.einsum("ij,kj->ik", a, b)
@@ -119,7 +113,9 @@ def pearson_r(x: torch.Tensor, y: torch.Tensor, eps: float = 1e-8) -> torch.Tens
     x_centered = x - torch.mean(x)
     y_centered = y - torch.mean(y)
     numerator = torch.sum(x_centered * y_centered)
-    denominator = torch.sqrt(torch.sum(x_centered ** 2)) * torch.sqrt(torch.sum(y_centered ** 2))
+    denominator = torch.sqrt(torch.sum(x_centered**2)) * torch.sqrt(
+        torch.sum(y_centered**2)
+    )
     return numerator / (denominator + eps)
 
 
@@ -127,13 +123,13 @@ GLUE_LABEL_MAPS = {
     "cola": {0: "unacceptable", 1: "acceptable"},
     "sst2": {0: "negative", 1: "positive"},
     "mrpc": {0: "not_equivalent", 1: "equivalent"},
-    "qqp":  {0: "not_duplicate", 1: "duplicate"},
+    "qqp": {0: "not_duplicate", 1: "duplicate"},
     "mnli": {0: "contradiction", 1: "entailment", 2: "neutral"},
     "qnli": {0: "entailment", 1: "not_entailment"},
-    "rte":  {0: "entailment", 1: "not_entailment"},
+    "rte": {0: "entailment", 1: "not_entailment"},
     "wnli": {0: "not_entailment", 1: "entailment"},
     # STS-B: regression, so there's no label map (use None).
-    "stsb": None
+    "stsb": None,
 }
 
 
@@ -144,11 +140,11 @@ def evaluate(
     dataset_name: str,
     run_name: str,
     test: bool = False,
-    glue_submission: bool = True
+    glue_submission: bool = True,
 ) -> Optional[Dict[str, float]]:
     """
     Evaluate or run inference on a model for a given dataset (train/validation/test).
-    
+
     If 'test' is True, loads the model from weights/<run_name>.pt, obtains predictions on
     the test set, and saves results to:
       - results/<dataset_name>_<run_name>.npy        (raw predictions)
@@ -187,28 +183,29 @@ def evaluate(
                 # STS-B or unsupported -> treat as regression (float) or direct output
                 # For STS-B, each row is just a float. Typical GLUE submission:
                 #   index [TAB] prediction
-                df = pd.DataFrame({
-                    "index": range(len(all_predictions)), 
-                    "prediction": all_predictions.reshape(-1)
-                })
+                df = pd.DataFrame(
+                    {
+                        "index": range(len(all_predictions)),
+                        "prediction": all_predictions.reshape(-1),
+                    }
+                )
             else:
                 # Classification -> map integer predictions to string labels
                 # If model outputs shape = (N,) or (N,1), ensure it’s flattened
                 all_predictions = all_predictions.reshape(-1)
-                
+
                 # Map each integer prediction to a string label
                 # e.g., [0,1,2] -> ["contradiction","entailment","neutral"]
                 str_labels = [label_map[int(p)] for p in all_predictions]
-                df = pd.DataFrame({
-                    "index": range(len(str_labels)), 
-                    "prediction": str_labels
-                })
-            
+                df = pd.DataFrame(
+                    {"index": range(len(str_labels)), "prediction": str_labels}
+                )
+
             tsv_path = f"results/{dataset_name}_{run_name}.tsv"
             df.to_csv(tsv_path, sep="\t", index=False)
             print(f"GLUE-style TSV submission saved to {tsv_path}")
 
-        return 
+        return
 
     # =====================
     # Evaluation on Val
@@ -238,12 +235,7 @@ def evaluate(
     f1 = f1_score(all_labels, all_preds, average="binary")
     mcc = matthews_corrcoef(all_labels, all_preds)
 
-    metrics = {
-        "accuracy": accuracy,
-        "precision": precision,
-        "f1": f1,
-        "mcc": mcc
-    }
+    metrics = {"accuracy": accuracy, "precision": precision, "f1": f1, "mcc": mcc}
 
     return metrics
 
@@ -256,7 +248,4 @@ def spearman_evaluate(
     eval_pearson_cosine, _ = pearsonr(similarities, labels)
     eval_spearman_cosine, _ = spearmanr(similarities, labels)
 
-    return {
-        "pearsonr": eval_pearson_cosine, 
-        "spearmanr": eval_spearman_cosine
-    }
+    return {"pearsonr": eval_pearson_cosine, "spearmanr": eval_spearman_cosine}

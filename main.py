@@ -10,7 +10,6 @@ torch.manual_seed(0)
 np.random.seed(0)
 
 from src.data import GlueDatasetLoader
-from src.benchmark import GLUEWrapper as Embedder
 from src.tan import TAN
 from src.trainer import train
 from src.transformer import Transformer
@@ -90,13 +89,19 @@ class Experiment:
         )
 
         if args.from_pretrained:
-            weight_path = os.path.join("pretrained_weights", "tan_" + args.config + ".pt")
+            weight_path = os.path.join(
+                "pretrained_weights", "tan_" + args.config + ".pt"
+            )
             state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
             tan.load_state_dict(state_dict)
 
         self.tan_embedder = Embedder(tan, num_outputs, num_sentences)
-        self.tan_optimizer = AdamW(self.tan_embedder.parameters(), lr=self.learning_rate)
-        print(f"\nNum of params TAN: {sum(p.numel() for p in tan.parameters() if p.requires_grad)}")
+        self.tan_optimizer = AdamW(
+            self.tan_embedder.parameters(), lr=self.learning_rate
+        )
+        print(
+            f"\nNum of params TAN: {sum(p.numel() for p in tan.parameters() if p.requires_grad)}"
+        )
 
         if self.include_baseline:
             transformer = Transformer(
@@ -111,11 +116,15 @@ class Experiment:
             )
 
             if args.from_pretrained:
-                weight_path = os.path.join("pretrained_weights", "transformer_" + args.config + ".pt")
+                weight_path = os.path.join(
+                    "pretrained_weights", "transformer_" + args.config + ".pt"
+                )
                 state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
                 transformer.load_state_dict(state_dict)
 
-            self.transformer_embedder = Embedder(transformer, num_outputs, num_sentences)
+            self.transformer_embedder = Embedder(
+                transformer, num_outputs, num_sentences
+            )
             self.transformer_optimizer = AdamW(
                 self.transformer_embedder.parameters(), lr=self.learning_rate
             )
@@ -146,17 +155,23 @@ def run(experiment, suffix=None):
             experiment.tan_embedder, experiment.tan_optimizer, experiment, name
         )
 
+
 def run_benchmark(args):
     # Datasets:[num_outputs, num_sentences]
     benchmark_datasets = {
-        "stsb":[0,2], 
-        "rte":[2,2], "mrpc":[2,2], "qqp":[2,2], "qnli":[2,2], # "wnli":[2,2], 
-        "mnli":[3,2], # "ax":[3,2],
-        "cola":[2,1], "sst2":[2,1],
-
-        "boolq":[2,2], "axb":[2,2], "axg":[2,2], 
-        "cb":[3,2],
-        "copa":[2,3],
+        "stsb": [0, 2],
+        "rte": [2, 2],
+        "mrpc": [2, 2],
+        "qqp": [2, 2],
+        "qnli": [2, 2],  # "wnli":[2,2],
+        "mnli": [3, 2],  # "ax":[3,2],
+        "cola": [2, 1],
+        "sst2": [2, 1],
+        "boolq": [2, 2],
+        "axb": [2, 2],
+        "axg": [2, 2],
+        "cb": [3, 2],
+        "copa": [2, 3],
     }
 
     configs = ["atomic", "nano", "micro", "milli"]
@@ -166,22 +181,23 @@ def run_benchmark(args):
             num_outputs, num_sentences = info
 
             experiment = Experiment(
-                    args,
-                    num_epochs=args.num_epochs,
-                    batch_size=64,
-                    learning_rate=2e-5,
-                    warmup_steps=args.warmup_steps,
-                    train_datasets=[dataset],
-                    validation_datasets=[dataset],
-                    include_baseline=args.include_baseline,
-                    dropout_prob=args.dropout_prob,
-                    max_seq_len=args.max_seq_len,
-                    vocab_size=args.vocab_size,
-                    num_outputs=num_outputs,
-                    num_sentences=num_sentences,
-                )
+                args,
+                num_epochs=args.num_epochs,
+                batch_size=64,
+                learning_rate=2e-5,
+                warmup_steps=args.warmup_steps,
+                train_datasets=[dataset],
+                validation_datasets=[dataset],
+                include_baseline=args.include_baseline,
+                dropout_prob=args.dropout_prob,
+                max_seq_len=args.max_seq_len,
+                vocab_size=args.vocab_size,
+                num_outputs=num_outputs,
+                num_sentences=num_sentences,
+            )
 
             run(experiment, config)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -256,10 +272,12 @@ def main():
 
     if args.benchmark:
         from src.benchmark import GLUEWrapper as Embedder
+
         run_benchmark(args)
         return
 
     from src.embedder import Embedder
+
     for n in args.num_hidden_layers:
         for dim in args.d_model:
             experiment = Experiment(

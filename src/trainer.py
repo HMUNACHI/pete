@@ -10,6 +10,7 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from transformers import get_linear_schedule_with_warmup
+
 from src.benchmark import evaluate
 
 
@@ -177,7 +178,9 @@ def train_loop(
             if writer and rank == 0:
                 # For DDP, use the underlying model
                 model_to_evaluate = embedder.module if is_ddp else embedder
-                results = evaluate(model_to_evaluate, data.data_loaders, device, dataset_name, name)
+                results = evaluate(
+                    model_to_evaluate, data.data_loaders, device, dataset_name, name
+                )
                 print(f"{dataset_name} Validation: {results}")
 
                 for metric, score in results.items():
@@ -199,7 +202,9 @@ def train_loop(
     if writer and rank == 0:
         # For DDP, use the underlying model
         model_to_evaluate = embedder.module if is_ddp else embedder
-        evaluate(model_to_evaluate, data.data_loaders, device, dataset_name, name, test=True)
+        evaluate(
+            model_to_evaluate, data.data_loaders, device, dataset_name, name, test=True
+        )
 
     return embedder
 

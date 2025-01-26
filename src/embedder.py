@@ -27,6 +27,11 @@ class Embedder(nn.Module):
             similarity_matrix.T, labels
         )
 
+    def get_predictions(self, batch: torch.Tensor) -> torch.Tensor:
+        sentence1 = self.model(input_ids=batch[0], attention_mask=batch[1])[1]
+        sentence2 = self.model(input_ids=batch[2], attention_mask=batch[3])[1]
+        return cosine_sim(sentence1, sentence2).diagonal()
+
     def embed(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor
     ) -> torch.Tensor:

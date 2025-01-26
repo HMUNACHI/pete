@@ -1,12 +1,12 @@
 from enum import Enum
-from typing import List, Dict
+from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import AdamW
 from sklearn.manifold import TSNE
+from torch.optim import AdamW
 
 from src.trainer import setup_scaler, setup_scheduler
 
@@ -239,7 +239,7 @@ def glue_benchmark(model, experiment, name, d_model):
                 optimizer.zero_grad()
 
                 with torch.autocast(device_type=device, dtype=torch.float16):
-                    train_loss = benchmarker(batch, mode)  
+                    train_loss = benchmarker(batch, mode)
 
                 scaler.scale(train_loss).backward()
                 scaler.step(optimizer)
