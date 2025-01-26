@@ -10,8 +10,7 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from transformers import get_linear_schedule_with_warmup
-
-from src.benchmark.stsb import evaluate
+from src.benchmark import evaluate
 
 
 def initialize_writer(name: str, is_master: bool) -> Optional[SummaryWriter]:
@@ -93,11 +92,6 @@ def train_loop(
             total_train_loss = 0.0
             train_loader = data.data_loaders[dataset_name]["train"]
 
-            if epoch == 0 and writer and rank == 0:
-                model_to_evaluate = embedder.module if is_ddp else embedder
-                results = evaluate(model_to_evaluate.model, data.data_loaders, device)
-                print(f"{dataset_name} Validation Before Fine-Tuning: {results}")
-
             if is_ddp:
                 train_loader.sampler.set_epoch(epoch)
 
@@ -127,7 +121,7 @@ def train_loop(
 
             for batch in train_loader:
                 batch = tuple(t.to(device) for t in batch)
-                optimizer.zero_grad()
+                # optimizer.zero_grad()
 
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     train_loss = embedder(batch)
@@ -136,6 +130,7 @@ def train_loop(
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
+                optimizer.zero_grad()
 
                 total_train_loss += train_loss.item()
                 global_step += 1
@@ -182,13 +177,14 @@ def train_loop(
             if writer and rank == 0:
                 # For DDP, use the underlying model
                 model_to_evaluate = embedder.module if is_ddp else embedder
-                results = evaluate(model_to_evaluate.model, data.data_loaders, device)
+                results = evaluate(model_to_evaluate, data.data_loaders, device, dataset_name, name)
                 print(f"{dataset_name} Validation: {results}")
 
-                log_metrics(writer, dataset_name, "pearsonr", results[0], global_step)
-                log_metrics(writer, dataset_name, "spearmanr", results[1], global_step)
+                for metric, score in results.items():
+                    log_metrics(writer, dataset_name, metric, score, global_step)
 
-                current_stsb_score = (results[0] + results[1]) / 2
+                values = list(results.values())
+                current_stsb_score = sum(values) / len(values)
 
                 if current_stsb_score > best_stsb_score:
                     best_stsb_score = current_stsb_score
@@ -203,7 +199,7 @@ def train_loop(
     if writer and rank == 0:
         # For DDP, use the underlying model
         model_to_evaluate = embedder.module if is_ddp else embedder
-        evaluate(model_to_evaluate, data.data_loaders, device, test=True)
+        evaluate(model_to_evaluate, data.data_loaders, device, dataset_name, name, test=True)
 
     return embedder
 

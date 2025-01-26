@@ -10,8 +10,7 @@ torch.manual_seed(0)
 np.random.seed(0)
 
 from src.data import GlueDatasetLoader
-# from src.embedder import Embedder
-from src.benchmark.stsb import STSBWrapper as Embedder
+from src.benchmark import GLUEWrapper as Embedder
 from src.tan import TAN
 from src.trainer import train
 from src.transformer import Transformer
@@ -34,7 +33,7 @@ class Experiment:
         warmup_steps: int = 1000,
         train_datasets: list = ["snli", "mnli"],
         validation_datasets: list = ["stsb"],
-        train_baseline=False,
+        include_baseline=False,
     ):
 
         self.vocab_size = vocab_size
@@ -52,12 +51,7 @@ class Experiment:
         self.warmup_steps = warmup_steps
         self.train_datasets = train_datasets
         self.validation_datasets = validation_datasets
-        self.train_baseline = train_baseline
-
-        benchmark_dataset = [
-            "mrpc", "stsb", "ax", "cola", "mnli", "rte", 
-            "qqp", "qnli", "sst2", "wnli", "paws", "snli"
-        ]
+        self.include_baseline = include_baseline
 
         if args.config == "atomic":
             self.num_attention_heads = 1
@@ -93,7 +87,7 @@ class Experiment:
             max_seq_len=self.max_seq_len,
         )
 
-        if args.pretrained:
+        if args.from_pretrained:
             weight_path = os.path.join("pretrained_weights", "tan_" + args.config + ".pt")
             state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
             tan.load_state_dict(state_dict)
@@ -102,7 +96,7 @@ class Experiment:
         self.tan_optimizer = AdamW(self.tan_embedder.parameters(), lr=self.learning_rate)
         print(f"\nNum of params TAN: {sum(p.numel() for p in tan.parameters() if p.requires_grad)}")
 
-        if self.train_baseline:
+        if self.include_baseline:
             transformer = Transformer(
                 vocab_size=self.vocab_size,
                 d_model=self.d_model,
@@ -113,6 +107,12 @@ class Experiment:
                 attention_probs_dropout_prob=self.attention_probs_dropout_prob,
                 intermediate_size=512,
             )
+
+            if args.from_pretrained:
+                weight_path = os.path.join("pretrained_weights", "transformer_" + args.config + ".pt")
+                state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
+                transformer.load_state_dict(state_dict)
+
             self.transformer_embedder = Embedder(transformer)
             self.transformer_optimizer = AdamW(
                 self.transformer_embedder.parameters(), lr=self.learning_rate
@@ -122,10 +122,13 @@ class Experiment:
             )
 
 
-def run(experiment):
-    if experiment.train_baseline:
+def run(experiment, suffix=None):
+    if suffix is None:
+        suffix = f"{experiment.num_hidden_layers}_{experiment.d_model}"
+
+    if experiment.include_baseline:
         print("\nTraining Transformer\n")
-        name = f"transformer_{experiment.num_hidden_layers}_{experiment.d_model}"
+        name = f"transformer_{suffix}"
         with timer(f"Transformer training ({name})"):
             transformer_embedder = train(
                 experiment.transformer_embedder,
@@ -135,12 +138,41 @@ def run(experiment):
             )
 
     print("\nTraining TAN\n")
-    name = f"TAN_{experiment.num_hidden_layers}_{experiment.d_model}"
+    name = f"tan_{suffix}"
     with timer(f"TAN training ({name})"):
         tan_embedder = train(
             experiment.tan_embedder, experiment.tan_optimizer, experiment, name
         )
 
+def run_benchmark(args):
+    benchmark_datasets = [
+        "stsb", 
+        "rte", "wnli", "qnli", "sst2", "qqp", "mrpc", "qnli", "wnli", 
+        "mnli", "cola", "ax" 
+        "boolq", 
+        "axg", "axb", "copa", 
+    ]
+
+    configs = ["atomic", "nano", "micro", "milli"]
+
+    for config in configs:
+        for dataset in benchmark_datasets:
+
+            experiment = Experiment(
+                    args,
+                    num_epochs=args.num_epochs,
+                    batch_size=64,
+                    learning_rate=0.00001,
+                    warmup_steps=args.warmup_steps,
+                    train_datasets=[dataset],
+                    validation_datasets=[dataset],
+                    include_baseline=args.include_baseline,
+                    dropout_prob=args.dropout_prob,
+                    max_seq_len=args.max_seq_len,
+                    vocab_size=args.vocab_size,
+                )
+
+            run(experiment, config)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -187,12 +219,12 @@ def main():
         help="List of validation datasets.",
     )
     parser.add_argument(
-        "--train-baseline",
+        "--include-baseline",
         action="store_true",
         help="Whether to train the baseline Transformer.",
     )
     parser.add_argument(
-        "--pretrained",
+        "--from-pretrained",
         action="store_true",
         help="Whether to load pretrained configuration",
     )
@@ -213,6 +245,12 @@ def main():
 
     args = parser.parse_args()
 
+    if args.benchmark:
+        from src.benchmark import GLUEWrapper as Embedder
+        run_benchmark(args)
+        return
+
+    from src.embedder import Embedder
     for n in args.num_hidden_layers:
         for dim in args.d_model:
             experiment = Experiment(
@@ -226,15 +264,16 @@ def main():
                 warmup_steps=args.warmup_steps,
                 train_datasets=args.train_datasets,
                 validation_datasets=args.validation_datasets,
-                train_baseline=args.train_baseline,
+                include_baseline=args.include_baseline,
                 dropout_prob=args.dropout_prob,
                 max_seq_len=args.max_seq_len,
                 vocab_size=args.vocab_size,
             )
 
             run(experiment)
-            # os.system("tensorboard --logdir=runs")
+            return
 
 
 if __name__ == "__main__":
     main()
+    os.system("tensorboard --logdir=runs")

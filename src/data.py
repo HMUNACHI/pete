@@ -103,15 +103,15 @@ class GlueDatasetLoader:
         default_factory=lambda: {
             #'ax': 0,     # 'entailment'
             #'cola': 1,   # 'acceptable'
-            "mnli": 0,  # 'entailment'
+            #"mnli": 0,   # 'entailment'
             #'mrpc': 1,   # 'equivalent'
             #'qnli': 0,   # 'entailment'
             #'qqp': 1,    # 'duplicate'
-            'rte': 0,    # 'entailment'
+            # 'rte': 0,    # 'entailment'
             #'sst2': 1,   # 'positive'
             #'wnli': 1,   # 'entailment'
             #'paws': 1,   # 'paraphrase'
-            "snli": 0,  # 'entailment'
+            # "snli": 0,  # 'entailment'
             # Exclude 'stsb' as it's a regression task
         },
     )
