@@ -10,37 +10,36 @@ torch.manual_seed(0)
 np.random.seed(0)
 
 
+class MLP(nn.Module):
+    """
+    Implements a decomposed linear layer with an intermediate activation.
+    """
+    def __init__(self, in_features, out_features):
+        super(MLP, self).__init__()
+        intermidiate = in_features * 4
+        self.w1 = nn.Linear(in_features, intermidiate*2)
+        self.w2 = nn.Linear(intermidiate, out_features)
+
+    def forward(self, x):
+        x = self.w1(x)
+        x, gate = x.chunk(2, dim=-1)
+        x = x * nn.functional.gelu(gate)
+        return self.w2(x)
+
+
 class RMSNorm(nn.Module):
     """
     Implements Root Mean Square Layer Normalization.
     """
-
-    def __init__(self, d_model: int, eps: float = 1e-6):
+    def __init__(self, dim: int, eps: float = 1e-6):
         super(RMSNorm, self).__init__()
-        self.weight = nn.Parameter(torch.ones(d_model))
+        self.weight = nn.Parameter(torch.ones(dim))
         self.eps = eps
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        rms = torch.sqrt(torch.mean(x**2, dim=-1, keepdim=True) + self.eps)
+    def forward(self, x: torch.Tensor, dim=-1) -> torch.Tensor:
+        rms = torch.sqrt(torch.mean(x**2, dim=dim, keepdim=True) + self.eps)
         x_normalized = x / rms
         return self.weight * x_normalized
-
-
-class MLP(nn.Module):
-    """
-    Implements a Multi-Layer Perceptron with GELU activation.
-    """
-
-    def __init__(self, d_model: int, intermediate_size: int):
-        super(MLP, self).__init__()
-        self.dense_expansion = nn.Linear(d_model, intermediate_size)
-        self.dense_contraction = nn.Linear(intermediate_size, d_model)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.dense_expansion(x)
-        x = F.gelu(x)
-        x = self.dense_contraction(x)
-        return x
 
 
 class RotaryPositionEncoding(nn.Module):
@@ -100,18 +99,12 @@ class Layer(nn.Module):
         self.attention_head_size = int(d_model / num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = nn.Linear(d_model, self.all_head_size)
-        self.key = nn.Linear(d_model, self.all_head_size)
-        self.value = nn.Linear(d_model, self.all_head_size)
+        self.projection = nn.Linear(d_model, d_model*3)
 
         self.dropout = nn.Dropout(attention_probs_dropout_prob)
         self.attn_out = nn.Linear(d_model, d_model)
         self.ln1 = RMSNorm(d_model)
-        self.mlp = nn.Sequential(
-            nn.Linear(d_model, intermediate_size),
-            nn.GELU(),
-            nn.Linear(intermediate_size, d_model),
-        )
+        self.mlp = MLP(d_model, d_model)
         self.ln2 = RMSNorm(d_model)
         self.rope = RotaryPositionEncoding(
             self.attention_head_size, max_position_embeddings
@@ -147,7 +140,7 @@ class Layer(nn.Module):
     def forward(self, x, attention_mask):
         residual = x
 
-        q, k, v = self.query(x), self.key(x), self.value(x)
+        q, k, v = self.projection(x).chunk(3, dim=-1)
 
         q = self.split_heads(q, self.num_attention_heads, self.attention_head_size)
         k = self.split_heads(k, self.num_attention_heads, self.attention_head_size)

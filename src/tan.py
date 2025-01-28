@@ -69,25 +69,23 @@ class MLP(nn.Module):
     """
     Implements a decomposed linear layer with an intermediate activation.
     """
-
-    def __init__(self, in_features, out_features, bottleneck_degree=1):
+    def __init__(self, in_features, out_features):
         super(MLP, self).__init__()
-        self.linear1 = nn.Linear(in_features, in_features // bottleneck_degree)
-        self.activation = nn.SiLU()
-        self.linear2 = nn.Linear(in_features // bottleneck_degree, out_features)
+        intermidiate = in_features * 4
+        self.w1 = nn.Linear(in_features, intermidiate*2)
+        self.w2 = nn.Linear(intermidiate, out_features)
 
     def forward(self, x):
-        x = self.linear1(x)
-        x = self.activation(x)
-        x = self.linear2(x)
-        return x
+        x = self.w1(x)
+        x, gate = x.chunk(2, dim=-1)
+        x = x * nn.functional.gelu(gate)
+        return self.w2(x)
 
 
 class RMSNorm(nn.Module):
     """
     Implements Root Mean Square Layer Normalization.
     """
-
     def __init__(self, dim: int, eps: float = 1e-6):
         super(RMSNorm, self).__init__()
         self.weight = nn.Parameter(torch.ones(dim))
@@ -99,7 +97,7 @@ class RMSNorm(nn.Module):
         return self.weight * x_normalized
 
 
-class AttentionBlock(nn.Module):
+class Layer(nn.Module):
     """
     Implements a multi-head attention block with feed-forward network.
     """
@@ -110,7 +108,7 @@ class AttentionBlock(nn.Module):
         num_attention_heads,
         max_seq_len,
     ):
-        super(AttentionBlock, self).__init__()
+        super(Layer, self).__init__()
 
         self.d_model = d_model
         self.num_attention_heads = num_attention_heads
@@ -118,14 +116,14 @@ class AttentionBlock(nn.Module):
         self.attention_head_size = int(d_model / num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = MLP(d_model, self.all_head_size)
-        self.key = MLP(d_model, self.all_head_size)
-        self.value = MLP(d_model, self.all_head_size)
+        self.projection = nn.Linear(d_model, d_model*3)
 
-        self.attn_out = MLP(d_model, d_model)
+        self.attn_out = nn.Linear(d_model, d_model)
         self.norm1 = RMSNorm(d_model)
-        self.bottleneck_mlp = MLP(d_model, d_model)
+
+        self.positional_ff = MLP(d_model, d_model)
         self.norm2 = RMSNorm(d_model)
+
         self.rope = RotaryPositionEncoding(self.attention_head_size, max_seq_len)
 
     def split_heads(self, tensor, num_heads, attention_head_size):
@@ -157,7 +155,8 @@ class AttentionBlock(nn.Module):
     def forward(self, x, attention_mask):
         residual = x
 
-        q, k, v = self.query(x), self.key(x), self.value(x)
+        q, k, v = self.projection(x).chunk(3, dim=-1)
+
         q = self.split_heads(q, self.num_attention_heads, self.attention_head_size)
         k = self.split_heads(k, self.num_attention_heads, self.attention_head_size)
         v = self.split_heads(v, self.num_attention_heads, self.attention_head_size)
@@ -170,13 +169,13 @@ class AttentionBlock(nn.Module):
         attended_outputs = self.merge_heads(
             attended_outputs, self.num_attention_heads, self.attention_head_size
         )
-        attended_outputs = self.attn_out(attended_outputs)
 
+        attended_outputs = self.attn_out(attended_outputs)
         x = self.norm1(attended_outputs + residual)
 
         residual = x
-        x = self.bottleneck_mlp(x)
-        x = self.norm2(x + residual)
+        x = self.positional_ff(x)
+        x = self.norm2(attended_outputs + residual)
 
         return x
 
@@ -196,7 +195,7 @@ class TAN(nn.Module):
     ):
         super(TAN, self).__init__()
         self.expansion = PolynomialBlock(vocab_size, d_model)
-        self.mlp = MLP(d_model, d_model)
+        self.mlp = nn.Linear(d_model, d_model)
         self.norm = RMSNorm(d_model)
         self.d_model = d_model
         self.num_hidden_layers = num_hidden_layers
@@ -206,7 +205,7 @@ class TAN(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                AttentionBlock(
+                Layer(
                     d_model,
                     num_attention_heads,
                     max_seq_len,
@@ -218,7 +217,7 @@ class TAN(nn.Module):
         self.pooler = nn.Sequential(
             OrderedDict(
                 [
-                    ("dense", MLP(d_model, d_model)),
+                    ("dense", nn.Linear(d_model, d_model)),
                     ("activation", nn.Tanh()),
                 ]
             )
@@ -228,7 +227,7 @@ class TAN(nn.Module):
         x_polynomials = self.expansion(input_ids)
         x = self.norm(self.mlp(x_polynomials) + x_polynomials)
 
-        for AttentionBlock in self.layers:
-            x = AttentionBlock(x, attention_mask)
+        for Layer in self.layers:
+            x = Layer(x, attention_mask)
 
         return (x, self.pooler(x.mean(axis=1)))
