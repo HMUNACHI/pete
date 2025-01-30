@@ -9,8 +9,6 @@ import torch.nn.functional as F
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import f1_score, matthews_corrcoef, precision_score
 
-from src.tan import MLP
-
 
 class GLUEWrapper(nn.Module):
 
@@ -26,7 +24,7 @@ class GLUEWrapper(nn.Module):
         self.num_sentences = num_sentences
 
         if self.num_outputs > 0:
-            self.classifier = MLP(self.model.d_model * num_sentences, num_outputs)
+            self.classifier = nn.Linear(self.model.d_model * num_sentences, num_outputs)
             self.temperature = nn.Parameter(torch.tensor([0.07]))
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
@@ -48,7 +46,7 @@ class GLUEWrapper(nn.Module):
     def forward_one_sentence(self, batch: torch.Tensor) -> torch.Tensor:
         embedding = self.model(input_ids=batch[0], attention_mask=batch[1])[1]
         labels = batch[-1].long()
-        return self.classification_loss(anchors, positives, labels)
+        return self.classification_loss_one_sentence(embedding, labels)
 
     def get_predictions(self, batch: torch.Tensor) -> torch.Tensor:
         if self.num_outputs == 0:
