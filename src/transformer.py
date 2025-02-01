@@ -187,7 +187,7 @@ class Transformer(nn.Module):
         super(Transformer, self).__init__()
 
         self.embeddings = nn.Embedding(vocab_size, d_model, padding_idx=0)
-
+        self.d_model = d_model
         self.ln = RMSNorm(d_model)
         self.dropout = nn.Dropout(hidden_dropout_prob)
 

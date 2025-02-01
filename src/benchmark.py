@@ -30,9 +30,7 @@ class GLUEWrapper(nn.Module):
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
 
         if self.num_sentences == 1:
-            embedding = self.model(input_ids=batch[0], attention_mask=batch[1])[1]
-            labels = batch[-1].long()
-            return self.classification_loss_one_sentence(embedding, labels)
+            return self.forward_one_sentence(batch)
 
         anchors = self.model(input_ids=batch[0], attention_mask=batch[1])[1]
         positives = self.model(input_ids=batch[2], attention_mask=batch[3])[1]
@@ -71,14 +69,18 @@ class GLUEWrapper(nn.Module):
         return F.cross_entropy(logits, ground_truth)
 
     def classification_predictions(self, batch: torch.Tensor) -> torch.Tensor:
+        if self.num_sentences == 1:
+            outputs = self.model(input_ids=batch[0], attention_mask=batch[1])
+            sentence = outputs[1]
+            return F.softmax(self.classifier(sentence), dim=-1).argmax(dim=-1)
+
         outputs1 = self.model(input_ids=batch[0], attention_mask=batch[1])
         outputs2 = self.model(input_ids=batch[2], attention_mask=batch[3])
         sentence1 = outputs1[1]
         sentence2 = outputs2[1]
         combined_rep = torch.cat([sentence1, sentence2], dim=-1)
         logits = self.classifier(combined_rep)
-        preds = torch.argmax(logits, dim=-1)
-        return preds
+        return F.softmax(logits, dim=-1).argmax(dim=-1)
 
     def correlation_loss(
         self,
@@ -194,7 +196,9 @@ def evaluate(
 
                 # Map each integer prediction to a string label
                 # e.g., [0,1,2] -> ["contradiction","entailment","neutral"]
-                str_labels = [label_map[int(p)] for p in all_predictions]
+                num_labels = len(label_map)
+                clamped_preds = [max(0, min(int(p), num_labels - 1)) for p in all_predictions]
+                str_labels = [label_map[p_int] for p_int in clamped_preds]
                 df = pd.DataFrame(
                     {"index": range(len(str_labels)), "prediction": str_labels}
                 )
@@ -217,7 +221,7 @@ def evaluate(
 
                 batch = [x.to(device) for x in batch]
                 preds = model.get_predictions(batch)
-                labels = batch[4].long()
+                labels = batch[-1].long()
 
                 all_preds.append(preds.cpu())
                 all_labels.append(labels.cpu())
@@ -228,13 +232,14 @@ def evaluate(
     if dataset_name == "stsb":
         return spearman_evaluate(all_preds, all_labels)
 
+    num_classes = len(np.unique(all_labels))
+    avg_type = "macro"
+
     accuracy = (all_preds == all_labels).sum().item() / len(all_labels)
-    precision = precision_score(all_labels, all_preds, average="binary")
-    f1 = f1_score(all_labels, all_preds, average="binary")
+    precision = precision_score(all_labels, all_preds, average=avg_type, zero_division=0)
+    f1 = f1_score(all_labels, all_preds, average=avg_type, zero_division=0)
     mcc = matthews_corrcoef(all_labels, all_preds)
-
     metrics = {"accuracy": accuracy, "precision": precision, "f1": f1, "mcc": mcc}
-
     return metrics
 
 

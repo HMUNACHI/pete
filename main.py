@@ -14,6 +14,7 @@ from src.tan import TAN
 from src.trainer import train
 from src.transformer import Transformer
 from src.utils import timer
+from src.benchmark import GLUEWrapper
 
 
 class Experiment:
@@ -54,25 +55,6 @@ class Experiment:
         self.validation_datasets = validation_datasets
         self.include_baseline = include_baseline
 
-        if args.config == "atomic":
-            self.num_attention_heads = 1
-            self.num_hidden_layers = 1
-            self.d_model = 64
-        elif args.config == "nano":
-            self.num_attention_heads = 2
-            self.num_hidden_layers = 2
-            self.d_model = 128
-        elif args.config == "micro":
-            self.num_attention_heads = 2
-            self.num_hidden_layers = 2
-            self.d_model = 256
-        elif args.config == "milli":
-            self.num_attention_heads = 1
-            self.num_hidden_layers = 1
-            self.d_model = 512
-        else:
-            raise ValueError(f"No configuration called '{args.config}'.")
-
         self.data = GlueDatasetLoader(
             tokenizer=self.tokenizer,
             max_length=self.max_seq_len,
@@ -88,7 +70,12 @@ class Experiment:
             max_seq_len=self.max_seq_len,
         )
 
-        if args.from_pretrained:
+        if args.benchmark:
+            Embedder = GLUEWrapper
+        else:
+            from src.embedder import Embedder
+
+        if args.from_pretrained or args.benchmark:
             weight_path = os.path.join(
                 "pretrained_weights", "tan_" + args.config + ".pt"
             )
@@ -112,7 +99,7 @@ class Experiment:
                 max_position_embeddings=self.max_seq_len,
                 hidden_dropout_prob=self.hidden_dropout_prob,
                 attention_probs_dropout_prob=self.attention_probs_dropout_prob,
-                intermediate_size=512,
+                intermediate_size=0,
             )
 
             if args.from_pretrained:
@@ -159,31 +146,39 @@ def run(experiment, suffix=None):
 def run_benchmark(args):
     # Datasets:[num_outputs, num_sentences]
     benchmark_datasets = {
-        "stsb": [0, 2],
-        "rte": [2, 2],
-        "mrpc": [2, 2],
-        "qqp": [2, 2],
-        "qnli": [2, 2],  # "wnli":[2,2],
-        "mnli": [3, 2],  # "ax":[3,2],
-        "cola": [2, 1],
-        "sst2": [2, 1],
-        "boolq": [2, 2],
-        "axb": [2, 2],
-        "axg": [2, 2],
-        "cb": [3, 2],
-        "copa": [2, 3],
+        # "stsb": [0, 2],
+        # "rte": [2, 2],
+        # "cola": [2, 1],
+        # "qnli": [2, 2], 
+        # "wnli": [2, 2],
+        # "sst2": [2, 1],
+        # "mrpc": [2, 2], 
+        "qqp":  [2, 2],
+        # "mnli": [3, 2],
+        # "ax": [3, 2],
     }
 
-    configs = ["atomic", "nano", "micro", "milli"]
+    configs = [
+        # [1, 64],
+        [1, 128],
+        [1, 256],
+        [1, 512],
+        # [2, 64],
+        [2, 128],
+        [2, 256],
+        [2, 512],
+        ]
 
     for config in configs:
         for dataset, info in benchmark_datasets.items():
             num_outputs, num_sentences = info
 
+            args.config = "_".join([str(item) for item in config])
+
+
             experiment = Experiment(
                 args,
-                num_epochs=args.num_epochs,
-                batch_size=64,
+                batch_size=256,
                 learning_rate=2e-5,
                 warmup_steps=args.warmup_steps,
                 train_datasets=[dataset],
@@ -194,6 +189,10 @@ def run_benchmark(args):
                 vocab_size=args.vocab_size,
                 num_outputs=num_outputs,
                 num_sentences=num_sentences,
+                num_hidden_layers=config[0],
+                num_attention_heads=config[0],
+                d_model=config[1],
+                num_epochs=30,
             )
 
             run(experiment, config)
@@ -221,7 +220,7 @@ def main():
     parser.add_argument("--num-epochs", type=int, default=5, help="Number of epochs.")
     parser.add_argument("--batch-size", type=int, default=256, help="Batch size.")
     parser.add_argument(
-        "--learning-rate", type=float, default=2e-5, help="Learning rate."
+        "--learning-rate", type=float, default=1e-5, help="Learning rate."
     )
     parser.add_argument(
         "--warmup-steps", type=int, default=1000, help="Number of warmup steps."
@@ -231,11 +230,6 @@ def main():
         nargs="+",
         default=["snli", "mnli"],
         help="List of training datasets.",
-    )
-    parser.add_argument(
-        "--config",
-        default="atomic",
-        help="one of the following configs; atomic, nano, micro, milli",
     )
     parser.add_argument(
         "--validation-datasets",

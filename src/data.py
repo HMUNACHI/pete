@@ -103,7 +103,7 @@ class GlueDatasetLoader:
         default_factory=lambda: {
             #'ax': 0,     # 'entailment'
             #'cola': 1,   # 'acceptable'
-            "mnli": 0,  # 'entailment'
+            # "mnli": 0,  # 'entailment'
             #'mrpc': 1,   # 'equivalent'
             #'qnli': 0,   # 'entailment'
             #'qqp': 1,    # 'duplicate'
@@ -111,7 +111,7 @@ class GlueDatasetLoader:
             #'sst2': 1,   # 'positive'
             #'wnli': 1,   # 'entailment'
             #'paws': 1,   # 'paraphrase'
-            "snli": 0,  # 'entailment'
+            # "snli": 0,  # 'entailment'
             # Exclude 'stsb' as it's a regression task
         },
     )
@@ -176,13 +176,6 @@ class GlueDatasetLoader:
 
                 sentence1_key, sentence2_key = self.get_sentence_keys(name)
                 label_key = "label" if "label" in ds_split.column_names else None
-
-                if label_key is not None:
-                    # Remove invalid labels (-1)
-                    ds_split = ds_split.filter(lambda example: example[label_key] != -1)
-                    if len(ds_split) == 0:
-                        print(f"Skipping {name} [{split}]; all labels are invalid.")
-                        continue
 
                 if name in self.positive_label_values and label_key is not None:
                     entailment_value = self.positive_label_values[name]
