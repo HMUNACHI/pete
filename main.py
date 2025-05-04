@@ -10,7 +10,7 @@ torch.manual_seed(0)
 np.random.seed(0)
 
 from src.data import GlueDatasetLoader
-from src.tan import TAN
+from src.pete import PETE
 from src.trainer import train
 from src.transformer import Transformer
 from src.utils import timer
@@ -62,7 +62,7 @@ class Experiment:
             dataset_names=self.train_datasets + self.validation_datasets,
         )
 
-        tan = TAN(
+        pete = PETE(
             vocab_size=self.vocab_size,
             d_model=self.d_model,
             num_hidden_layers=self.num_hidden_layers,
@@ -77,17 +77,17 @@ class Experiment:
 
         if args.from_pretrained or args.benchmark:
             weight_path = os.path.join(
-                "pretrained_weights", "tan_" + args.config + ".pt"
+                "pretrained_weights", "pete_" + args.config + ".pt"
             )
             state_dict = torch.load(weight_path, map_location=torch.device("cuda"))
-            tan.load_state_dict(state_dict)
+            pete.load_state_dict(state_dict)
 
-        self.tan_embedder = Embedder(tan, num_outputs, num_sentences)
-        self.tan_optimizer = AdamW(
-            self.tan_embedder.parameters(), lr=self.learning_rate
+        self.pete_embedder = Embedder(pete, num_outputs, num_sentences)
+        self.pete_optimizer = AdamW(
+            self.pete_embedder.parameters(), lr=self.learning_rate
         )
         print(
-            f"\nNum of params TAN: {sum(p.numel() for p in tan.parameters() if p.requires_grad)}"
+            f"\nNum of params PETE: {sum(p.numel() for p in pete.parameters() if p.requires_grad)}"
         )
 
         if self.include_baseline:
@@ -135,27 +135,27 @@ def run(experiment, suffix=None):
                 name,
             )
 
-    print("\nTraining TAN\n")
-    name = f"tan_{suffix}"
-    with timer(f"TAN training ({name})"):
-        tan_embedder = train(
-            experiment.tan_embedder, experiment.tan_optimizer, experiment, name
+    print("\nTraining PETE\n")
+    name = f"pete_{suffix}"
+    with timer(f"PETE training ({name})"):
+        pete_embedder = train(
+            experiment.pete_embedder, experiment.pete_optimizer, experiment, name
         )
 
 
 def run_benchmark(args):
     # Datasets:[num_outputs, num_sentences]
     benchmark_datasets = {
-        # "stsb": [0, 2],
-        # "rte": [2, 2],
-        # "cola": [2, 1],
-        # "qnli": [2, 2], 
-        # "wnli": [2, 2],
-        # "sst2": [2, 1],
-        # "mrpc": [2, 2], 
+        "stsb": [0, 2],
+        "rte": [2, 2],
+        "cola": [2, 1],
+        "qnli": [2, 2], 
+        "wnli": [2, 2],
+        "sst2": [2, 1],
+        "mrpc": [2, 2], 
         "qqp":  [2, 2],
-        # "mnli": [3, 2],
-        # "ax": [3, 2],
+        "mnli": [3, 2],
+        "ax": [3, 2],
     }
 
     configs = [

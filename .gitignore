@@ -168,3 +168,4 @@ Icon
 .env.*.local
 
 runs
+playground.py
