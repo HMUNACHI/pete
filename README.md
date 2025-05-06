@@ -122,7 +122,7 @@ If you find this work useful in your research, please cite our paper:
   title={Parameter-Efficient Transformer Embedding},
   author={Ndubuaku, Henry and Talhi, Mouad},
   journal={arXiv preprint arXiv:2505.02266},
-  year={2024} % Adjust year if needed
+  year={2025}
 }
 ```
 
