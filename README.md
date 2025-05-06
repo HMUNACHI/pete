@@ -1,7 +1,7 @@
 # Parameter-Efficient Transformer Embeddings (PETE)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](https://arxiv.org/abs/XXXX.XXXXX) <!-- Replace with actual arXiv ID -->
+[![arXiv](https://img.shields.io/badge/arXiv-2505.02266-b31b1b.svg)](https://arxiv.org/abs/2505.02266) 
 
 This repository contains the official implementation for the paper **"Parameter-Efficient Transformer Embedding"** by Henry Ndubuaku and Mouad Talhi.
 
@@ -55,7 +55,7 @@ This method significantly reduces the parameter count compared to standard learn
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/HMUNACHI/pete.git # Replace with actual repo URL if different
+    git clone https://github.com/HMUNACHI/pete.git 
     cd pete
     ```
 
@@ -121,7 +121,7 @@ If you find this work useful in your research, please cite our paper:
 @article{ndubuaku2024pete,
   title={Parameter-Efficient Transformer Embedding},
   author={Ndubuaku, Henry and Talhi, Mouad},
-  journal={arXiv preprint arXiv:XXXX.XXXXX}, % Replace with actual arXiv ID
+  journal={arXiv preprint arXiv:2505.02266},
   year={2024} % Adjust year if needed
 }
 ```
